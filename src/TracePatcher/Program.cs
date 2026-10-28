@@ -2,6 +2,10 @@ using System;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+if(args.Length==2&&args[0]=="verify-network-trace") {
+ using var candidate=AssemblyDefinition.ReadAssembly(args[1]);
+ NetworkTracePatch.Verify(candidate);return;
+}
 if(args.Length==2&&args[0]=="verify-local-platform") {
  using var candidate=AssemblyDefinition.ReadAssembly(args[1]);
  LocalPlatformPatch.Verify(candidate);return;
@@ -68,6 +72,7 @@ if(args.Length>5&&args[5]=="local-api") {
  LocalBattleRestorePatch.Apply(asm);
  GzipBridge.Apply(fp,unity);
  var flow=AssemblyDefinition.ReadAssembly(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[1])!,"RTDFlow.dll"));
+ NetworkTracePatch.Apply(asm,flow,log);
  var tick=mod.ImportReference(flow.MainModule.GetType("RTDFlow").Methods.First(m=>m.Name=="Tick"));
    foreach(var name in new[]{"TitleMenu","Installer","GameManager","MainMenu","MMResult","MMLogin","MMGachaCommon","MMGachaMenu","MMUnitDetail","MMUnitMenu","MMUnitPartyBase","MMUnitPartyList","MMUnitView","MMUnitSell","MMUnitUnionBase","MMUnitUnionList","MMUnitUnion","MMUnitEvoBase","MMUnitEvoList","MMUnitEvo","MMUnitSpCompBase","MMUnitSpCompList","MMUnitSpComp","MMQuest","MMEtcPresent","MMShop","MMShopAP","MMShopUnitSlot","MMShopFriend","MMEtcMenu","MMEtcChangeName","MMFriendMenu","MMFriendSearch","MMFriendList","MMFriendPost","MMFriendApply","MMFriendListSelPresent","MMHelper"}) {
   var method=mod.GetType(name).Methods.First(m=>m.Name=="Update");

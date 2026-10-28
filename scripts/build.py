@@ -63,7 +63,7 @@ def main():
  compiler=sorted((pathlib.Path(dotnet).parent/'sdk').glob('*/Roslyn/bincore/csc.dll'))[-1]
  def compile(name,files,extra=()):
   run([dotnet,compiler,'/nologo','/noconfig','/nostdlib','/target:library','/optimize+','/deterministic+','/out:'+str(build/name),'/reference:'+str(managed/'mscorlib.dll'),'/reference:'+str(managed/'UnityEngine.dll'),*extra,*[ROOT/'src'/f for f in files]])
- compile('RTDFlow.dll',['RTDFlow.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs'])
+ compile('RTDFlow.dll',['RTDFlow.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs','RTDNetworkTrace.cs'])
  compile('RTDRestoreCache.dll',['RTDRestoreCache.cs'],['/define:RTD_LEGACY','/reference:'+str(managed/'Assembly-CSharp.dll')])
  resources=['/resource:'+str(path(p['translation']))+',rtd.translation.json']
  font_paths=[path(p['fontPng']),path(p['fontGlyphs'])]
@@ -87,6 +87,8 @@ def main():
  patch('LoaderTests',[])
  patch('LocalizationTests',[managed/'Assembly-CSharp.dll',build/'Assembly-CSharp.dll'])
  patch('TracePatcher',['verify-local-platform',build/'Assembly-CSharp.dll']);patch('TracePatcher',['verify-local-battle-restore',build/'Assembly-CSharp.dll'])
+ patch('TracePatcher',['verify-network-trace',build/'Assembly-CSharp.dll'])
+ shutil.copyfile(build/'endpoint-audit.json',dist/'endpoint-audit.json')
  replacements={NATIVE_MEMBER:native,'assets/bin/Data/level0':bytes(scene),'assets/bin/Data/Managed/Assembly-CSharp.dll':(build/'Assembly-CSharp.dll').read_bytes(),'assets/bin/Data/Managed/Assembly-CSharp-firstpass.dll':(build/'Assembly-CSharp-firstpass-trace.dll').read_bytes()}
  for helper in ['RTDFlow.dll','RTDRestoreCache.dll','RTDLocalization.dll']:replacements['assets/bin/Data/Managed/'+helper]=(build/helper).read_bytes()
  replacements['AndroidManifest.xml']=manifest
@@ -115,6 +117,7 @@ def main():
   assert len(z.namelist())==len(set(z.namelist()))
   for site in meta['call_sites']:assert struct.unpack_from('<I',native,site)[0]>>24==0xea
  meta.update(original_apk_sha256=original_sha,apk_sha256=sha(out.read_bytes()),output=report_path(out),translation_entries=len(translations),network=net,verification='zipalign/apksigner/native-sites/managed-shapes; no device/runtime validation')
+ meta.update(startup_billing_checks='bypassed in local mode',network_trace='RTD_NET; five WWW POST sites',endpoint_audit=report_path(dist/'endpoint-audit.json'))
  (dist/'build-report.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(meta,ensure_ascii=False,indent=2))
 def unique(pairs):
  d={}

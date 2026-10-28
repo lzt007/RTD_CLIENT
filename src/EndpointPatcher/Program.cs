@@ -1,3 +1,12 @@
 using System;using System.IO;using System.Linq;using System.Text.Json;using Mono.Cecil;using Mono.Cecil.Cil;
 using var cfg=JsonDocument.Parse(File.ReadAllText(args[2]));var n=cfg.RootElement.GetProperty("network");string resource="http://"+n.GetProperty("deviceHost").GetString()+":"+n.GetProperty("resourcePort").GetInt32();string api="http://"+n.GetProperty("deviceHost").GetString()+":"+n.GetProperty("apiPort").GetInt32()+n.GetProperty("apiPath").GetString();
 using var a=AssemblyDefinition.ReadAssembly(args[0]);int changed=0,seen=0;foreach(var t in a.MainModule.GetTypes())foreach(var m in t.Methods.Where(m=>m.HasBody))foreach(var i in m.Body.Instructions)if(i.OpCode==OpCodes.Ldstr&&i.Operand is string s){if(s is "http://127.0.0.1:18765/" or "http://127.0.0.1:18765/rtd/local-notice" or "http://127.0.0.1:18765/rtd/local/common-text4.json" or "http://127.0.0.1:18766/rtd/2.4.0/api/")seen++;string v=s switch {"http://127.0.0.1:18765/"=>resource+"/","http://127.0.0.1:18765/rtd/local-notice"=>resource+n.GetProperty("noticePath").GetString(),"http://127.0.0.1:18765/rtd/local/common-text4.json"=>resource+n.GetProperty("commonTextPath").GetString(),"http://127.0.0.1:18766/rtd/2.4.0/api/"=>api,_=>s};if(v!=s){i.Operand=v;changed++;}}if(seen!=6)throw new Exception("Expected six endpoint sites, found "+seen);a.Write(args[1]);Console.WriteLine("Configured endpoint literals changed: "+changed);
+int legacy=0;
+foreach(var type in a.MainModule.GetTypes())foreach(var method in type.Methods.Where(m=>m.HasBody))foreach(var ins in method.Body.Instructions) {
+ if(ins.OpCode!=OpCodes.Ldstr || ins.Operand is not string url || !(url.StartsWith("http://")||url.StartsWith("https://")))continue;
+ string replacement=url.EndsWith("/rtd/2.4.0/api/")?api:url.EndsWith("/rtd/2.4.0/com_text4.json")?resource+n.GetProperty("commonTextPath").GetString():url.EndsWith("/QRPG/DLC/")?resource+"/":url;
+ if(replacement!=url){ins.Operand=replacement;legacy++;}
+}
+a.Write(args[1]);Console.WriteLine("Additional debug/fallback endpoint literals changed: "+legacy);
+var urls=a.MainModule.GetTypes().SelectMany(t=>t.Methods.Where(m=>m.HasBody).SelectMany(m=>m.Body.Instructions.Where(i=>i.OpCode==OpCodes.Ldstr&&i.Operand is string s&&(s.StartsWith("http://")||s.StartsWith("https://"))).Select(i=>new {method=m.FullName,url=(string)i.Operand}))).ToArray();
+File.WriteAllText(Path.Combine(Path.GetDirectoryName(args[1])!,"endpoint-audit.json"),JsonSerializer.Serialize(urls,new JsonSerializerOptions{WriteIndented=true}));

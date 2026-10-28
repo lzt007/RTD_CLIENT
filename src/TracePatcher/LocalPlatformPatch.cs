@@ -6,6 +6,12 @@ using Mono.Cecil.Cil;
 static class LocalPlatformPatch {
  public static void Apply(AssemblyDefinition assembly) {
   var mod=assembly.MainModule;var shop=mod.GetType("MMShop");
+  // The two startup entries must not wait for the discontinued Google IAB service.
+  var title=mod.GetType("TitleMenu").Methods.Single(m=>m.Name=="Update");
+  var billingEntries=title.Body.Instructions.Where(i=>i.OpCode==OpCodes.Ldc_I4 && Convert.ToInt32(i.Operand)==400 && i.Next.OpCode==OpCodes.Stfld && i.Next.Operand is FieldReference f && f.Name=="m_Mode").ToArray();
+  if(billingEntries.Length!=6)throw new Exception("Title billing state shape changed: "+billingEntries.Length);
+  foreach(var entry in billingEntries.Take(2))entry.Operand=200;
+  Console.WriteLine("Local startup: bypassed two Google billing checks; no purchase or reward generated");
   var open=mod.GetType("Dialog").Methods.Single(m=>m.Name=="Open1B_Direct"&&m.Parameters.Count==3);
   var mode=mod.GetType("UIBase").Fields.Single(f=>f.Name=="m_Mode");
   var dialog=shop.Fields.Single(f=>f.Name=="m_dialog");
@@ -26,6 +32,9 @@ static class LocalPlatformPatch {
   Verify(assembly);
  }
  public static void Verify(AssemblyDefinition assembly) {
+  var title=assembly.MainModule.GetType("TitleMenu").Methods.Single(m=>m.Name=="Update");
+  int billingStates=title.Body.Instructions.Count(i=>i.OpCode==OpCodes.Ldc_I4 && Convert.ToInt32(i.Operand)==400 && i.Next.OpCode==OpCodes.Stfld && i.Next.Operand is FieldReference f && f.Name=="m_Mode");
+  if(billingStates!=4)throw new Exception("Two startup Google billing entries must be bypassed; remaining states: "+billingStates);
   var shop=assembly.MainModule.GetType("MMShop");
   foreach(var name in new[]{"OnClickReview","OnClickNoahOffer"}) {
    var method=shop.Methods.Single(m=>m.Name==name);
