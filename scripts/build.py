@@ -2,6 +2,7 @@
 import pathlib,json,os,shutil,subprocess,zipfile,hashlib,struct,copy,re,sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 from native_input import patch_native,NATIVE_MEMBER
+from android_launcher import patch_launcher
 from localization_contract import validate
 
 def sha(b):return hashlib.sha256(b).hexdigest()
@@ -47,12 +48,15 @@ def main():
   for name in z.namelist():
    if name.startswith('assets/bin/Data/Managed/') and name.endswith('.dll'):(managed/pathlib.Path(name).name).write_bytes(z.read(name))
   native,meta=patch_native(z.read(NATIVE_MEMBER));scene=bytearray(z.read('assets/bin/Data/level0'))
+  manifest=patch_launcher(z.read('AndroidManifest.xml'))
+  mono=z.read('assets/libs/armeabi-v7a/libmono.so')
  old=bytes(scene[24320:24404]);assert len(old)==84 and struct.unpack_from('<I',old,72)[0]==20021
  def string(s):
   b=s.encode();d=struct.pack('<I',len(b))+b;return d+b'\0'*((-len(d))%4)
  new=old[:24]+struct.pack('<IIII',0,20021,0,3)+string('ms01_sla_lv1')+string('ms01_sla_fire_lv1')+string('');assert len(new)==84;scene[24320:24404]=new
  dotnet=path(t['dotnet']) if t['dotnet'] else shutil.which('dotnet');java=java_home(t['javaHome'])
  sdk=path(t['androidSdk']) if t['androidSdk'] else pathlib.Path(os.environ.get('ANDROID_HOME',str(pathlib.Path.home()/'AppData/Local/Android/Sdk')))
+ if not t['androidSdk'] and not (sdk/'build-tools').is_dir() and (ROOT/'tools/android-sdk/build-tools').is_dir():sdk=ROOT/'tools/android-sdk'
  if not (sdk/'build-tools').is_dir():raise ValueError('Android SDK build-tools missing: set tools.androidSdk or ANDROID_HOME')
  if not (java/'bin/java.exe').is_file():raise ValueError('JDK missing: set tools.javaHome or JAVA_HOME')
  bt=sorted((sdk/'build-tools').iterdir())[-1];keytool=java/'bin/keytool.exe';apksigner=bt/'lib/apksigner.jar';zipalign=bt/'zipalign.exe'
@@ -85,6 +89,10 @@ def main():
  patch('TracePatcher',['verify-local-platform',build/'Assembly-CSharp.dll']);patch('TracePatcher',['verify-local-battle-restore',build/'Assembly-CSharp.dll'])
  replacements={NATIVE_MEMBER:native,'assets/bin/Data/level0':bytes(scene),'assets/bin/Data/Managed/Assembly-CSharp.dll':(build/'Assembly-CSharp.dll').read_bytes(),'assets/bin/Data/Managed/Assembly-CSharp-firstpass.dll':(build/'Assembly-CSharp-firstpass-trace.dll').read_bytes()}
  for helper in ['RTDFlow.dll','RTDRestoreCache.dll','RTDLocalization.dll']:replacements['assets/bin/Data/Managed/'+helper]=(build/helper).read_bytes()
+ replacements['AndroidManifest.xml']=manifest
+ # Replace obsolete native loader shells with the actual original engine libraries.
+ replacements['lib/armeabi-v7a/libunity.so']=native
+ replacements['lib/armeabi-v7a/libmono.so']=mono
  replacements['assets/rtd-localization/translation.json']=path(p['translation']).read_bytes()
  for filename,filepath in zip(['font.png','font.tsv'],font_paths):
   if filepath.exists():replacements['assets/rtd-localization/'+filename]=filepath.read_bytes()
@@ -100,6 +108,9 @@ def main():
  run([zipalign,'-c','-p','4',out]);run([java/'bin/java.exe','-jar',apksigner,'verify','--verbose','--print-certs',out])
  with zipfile.ZipFile(out) as z:
   assert z.read(NATIVE_MEMBER)==native
+  assert z.read('lib/armeabi-v7a/libunity.so')==native
+  assert z.read('lib/armeabi-v7a/libmono.so')==mono
+  assert z.read('AndroidManifest.xml')==manifest
   with zipfile.ZipFile(source) as original:assert z.read('classes.dex')==original.read('classes.dex')
   assert len(z.namelist())==len(set(z.namelist()))
   for site in meta['call_sites']:assert struct.unpack_from('<I',native,site)[0]>>24==0xea
