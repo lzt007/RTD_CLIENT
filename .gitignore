@@ -11,3 +11,4 @@ inputs/localization/*.tsv
 *.keystore
 .venv/
 inputs/localization/translation.json
+.idea/

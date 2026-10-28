@@ -26,4 +26,6 @@
 
 详见 [部署与开发](docs/开发部署.md)、[翻译与字体](docs/翻译字体.md)。当前默认翻译表为 `{}`；并未完成全量汉化，也未进行设备界面/字体/内存验收。
 
+旧兼容问题的排查与实现依据见 [JNI 桥接与崩溃排查](docs/JNI桥接与崩溃排查.md)、[广告插件启动崩溃](docs/广告插件启动崩溃.md)。JNI 方案绕过旧原生调用路径，未证明 JNI_OnLoad 本身是根因；广告默认启动入口尚未修改，需显式启动 Unity Activity，命令及历史验证范围见广告文档。
+
 部署翻译映射 `inputs/localization/translation.json` 被Git忽略，正式词条由RTD_TRANSLATION项目统一维护。首次构建若文件缺失，自动从 `examples/translation.example.json` 初始化空对象；之后把翻译项目导出文件复制到该路径即可。
