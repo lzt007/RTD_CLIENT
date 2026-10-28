@@ -1,0 +1,13 @@
+tools/
+build/
+dist/
+inputs/original/
+resources/
+inputs/localization/*.png
+inputs/localization/*.tsv
+**/bin/
+**/obj/
+**/__pycache__/
+*.keystore
+.venv/
+inputs/localization/translation.json

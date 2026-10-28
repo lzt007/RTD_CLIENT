@@ -1,0 +1,37 @@
+{
+  "network": {
+    "deviceHost": "127.0.0.1",
+    "apiPort": 18766,
+    "resourcePort": 18765,
+    "apiPath": "/rtd/2.4.0/api/",
+    "noticePath": "/rtd/local-notice",
+    "commonTextPath": "/rtd/local/common-text4.json"
+  },
+  "paths": {
+    "originalApk": "inputs/original/game.apk",
+    "resourceCache": "resources/UnityCache",
+    "translation": "inputs/localization/translation.json",
+    "fontPng": "inputs/localization/font.png",
+    "fontGlyphs": "inputs/localization/font.tsv",
+    "build": "build",
+    "dist": "dist",
+    "keystore": "build/development.keystore",
+    "fontSource": ""
+  },
+  "tools": {
+    "python": "",
+    "dotnet": "tools/dotnet/dotnet.exe",
+    "javaHome": "",
+    "androidSdk": "",
+    "cecil": "tools/cecil/Mono.Cecil.dll"
+  },
+  "signing": {
+    "alias": "rtd-development",
+    "storePassword": "android",
+    "keyPassword": "android"
+  },
+  "font": {
+    "size": 32,
+    "atlasSize": 2048
+  }
+}

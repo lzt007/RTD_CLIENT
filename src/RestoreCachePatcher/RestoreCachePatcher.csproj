@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><RTDCecilPath Condition="'$(RTDCecilPath)' == ''">$(MSBuildThisFileDirectory)../../tools/cecil/Mono.Cecil.dll</RTDCecilPath><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+ <ItemGroup><Reference Include="Mono.Cecil"><HintPath>$(RTDCecilPath)</HintPath></Reference></ItemGroup>
+</Project>
