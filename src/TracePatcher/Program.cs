@@ -2,6 +2,17 @@ using System;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+if(args.Length==3&&args[0]=="embed-cache-hook") {
+ using var a=AssemblyDefinition.ReadAssembly(args[1],new ReaderParameters{InMemory=true});using var helper=AssemblyDefinition.ReadAssembly(args[2]);
+ var ensure=a.MainModule.ImportReference(helper.MainModule.GetType("RTDEmbeddedCache").Methods.Single(m=>m.Name=="Ensure"));int count=0;
+ foreach(var t in a.MainModule.GetTypes())foreach(var m in t.Methods.Where(m=>m.HasBody)) {
+  if((t.Name=="TitleMenu"||t.Name=="Installer")&&m.Name=="Awake") {m.Body.GetILProcessor().InsertBefore(m.Body.Instructions[0],Instruction.Create(OpCodes.Call,ensure));count++;}
+ }
+ if(count<1)throw new Exception("Missing resource bootstrap entry");a.Write(args[1]);Console.WriteLine("Embedded cache startup hooks: "+count);return;
+}
+if(args.Length==3&&args[0]=="filter-logs") {
+ LogLevelPatch.Apply(args[1],args[2]);return;
+}
 if(args.Length==2&&args[0]=="verify-network-trace") {
  using var candidate=AssemblyDefinition.ReadAssembly(args[1]);
  NetworkTracePatch.Verify(candidate);return;

@@ -38,6 +38,8 @@ def java_home(configured=''):
 
 def main():
  c=json.loads((ROOT/'rtd.config.json').read_text(encoding='utf-8-sig'));p=c['paths'];t=c['tools'];net=c['network']
+ log_level=c.get('logging',{}).get('level','debug')
+ if log_level not in ('debug','info','warning','error','none'):raise ValueError('logging.level must be debug/info/warning/error/none')
  build=path(p['build']);build.mkdir(parents=True,exist_ok=True);dist=path(p['dist']);dist.mkdir(parents=True,exist_ok=True)
  translation_path=translation_input(p['translation'])
  translations=validate(json.loads(translation_path.read_text(encoding='utf-8-sig'),object_pairs_hook=unique))
@@ -62,8 +64,19 @@ def main():
  bt=sorted((sdk/'build-tools').iterdir())[-1];keytool=java/'bin/keytool.exe';apksigner=bt/'lib/apksigner.jar';zipalign=bt/'zipalign.exe'
  compiler=sorted((pathlib.Path(dotnet).parent/'sdk').glob('*/Roslyn/bincore/csc.dll'))[-1]
  def compile(name,files,extra=()):
-  run([dotnet,compiler,'/nologo','/noconfig','/nostdlib','/target:library','/optimize+','/deterministic+','/out:'+str(build/name),'/reference:'+str(managed/'mscorlib.dll'),'/reference:'+str(managed/'UnityEngine.dll'),*extra,*[ROOT/'src'/f for f in files]])
- compile('RTDFlow.dll',['RTDFlow.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs','RTDNetworkTrace.cs'])
+  arguments=['/nostdlib','/target:library','/optimize+','/deterministic+','/out:'+str(build/name),'/reference:'+str(managed/'mscorlib.dll'),'/reference:'+str(managed/'UnityEngine.dll'),*extra,*[ROOT/'src'/f for f in files]]
+  response=build/(name+'.rsp');response.write_text('\n'.join(chr(34)+str(a)+chr(34) for a in arguments),encoding='utf-8')
+  run([dotnet,compiler,'/nologo','/noconfig','@'+str(response)])
+ cache_files=sorted(x for x in path(p['resourceCache']).rglob('*') if x.is_file())
+ if not cache_files:raise ValueError('Embedded resource cache is empty')
+ cache_index=[];cache_resources=[]
+ for f in cache_files:
+  relative=f.relative_to(path(p['resourceCache'])).as_posix()
+  if not relative.startswith('Shared/'):raise ValueError('Unexpected cache path: '+relative)
+  cache_index.append(relative+'|'+str(f.stat().st_size)+'|'+sha(f.read_bytes()))
+
+ (build/'EmbeddedCacheIndex.cs').write_text('public static class EmbeddedCacheIndex { public static readonly string[] Files = new string[]{'+','.join(json.dumps(x) for x in cache_index)+'};}',encoding='utf-8')
+ compile('RTDFlow.dll',['RTDFlow.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs','RTDNetworkTrace.cs','RTDEmbeddedCache.cs',str(build/'EmbeddedCacheIndex.cs')],cache_resources)
  compile('RTDRestoreCache.dll',['RTDRestoreCache.cs'],['/define:RTD_LEGACY','/reference:'+str(managed/'Assembly-CSharp.dll')])
  resources=['/resource:'+str(path(p['translation']))+',rtd.translation.json']
  font_paths=[path(p['fontPng']),path(p['fontGlyphs'])]
@@ -84,13 +97,17 @@ def main():
  patch('LocalizationPatcher',[build/'notice.dll',build/'RTDLocalization.dll',managed,build/'localized.dll'])
  # Rewrite all patch-injected roots after structural patches; original sources remain untouched.
  patch('EndpointPatcher',[build/'localized.dll',build/'Assembly-CSharp.dll',str(ROOT/'rtd.config.json')])
+ patch('TracePatcher',['embed-cache-hook',build/'Assembly-CSharp.dll',build/'RTDFlow.dll'])
  patch('LoaderTests',[])
  patch('LocalizationTests',[managed/'Assembly-CSharp.dll',build/'Assembly-CSharp.dll'])
  patch('TracePatcher',['verify-local-platform',build/'Assembly-CSharp.dll']);patch('TracePatcher',['verify-local-battle-restore',build/'Assembly-CSharp.dll'])
  patch('TracePatcher',['verify-network-trace',build/'Assembly-CSharp.dll'])
+ for assembly in ['Assembly-CSharp.dll','Assembly-CSharp-firstpass-trace.dll','RTDFlow.dll','RTDRestoreCache.dll','RTDLocalization.dll']:
+  patch('TracePatcher',['filter-logs',build/assembly,log_level])
  shutil.copyfile(build/'endpoint-audit.json',dist/'endpoint-audit.json')
  replacements={NATIVE_MEMBER:native,'assets/bin/Data/level0':bytes(scene),'assets/bin/Data/Managed/Assembly-CSharp.dll':(build/'Assembly-CSharp.dll').read_bytes(),'assets/bin/Data/Managed/Assembly-CSharp-firstpass.dll':(build/'Assembly-CSharp-firstpass-trace.dll').read_bytes()}
  for helper in ['RTDFlow.dll','RTDRestoreCache.dll','RTDLocalization.dll']:replacements['assets/bin/Data/Managed/'+helper]=(build/helper).read_bytes()
+ for f in cache_files:replacements['assets/rtd-cache/'+f.relative_to(path(p['resourceCache'])).as_posix()]=f.read_bytes()
  replacements['AndroidManifest.xml']=manifest
  # Replace obsolete native loader shells with the actual original engine libraries.
  replacements['lib/armeabi-v7a/libunity.so']=native
@@ -113,10 +130,12 @@ def main():
   assert z.read('lib/armeabi-v7a/libunity.so')==native
   assert z.read('lib/armeabi-v7a/libmono.so')==mono
   assert z.read('AndroidManifest.xml')==manifest
+  for f in cache_files:assert z.read('assets/rtd-cache/'+f.relative_to(path(p['resourceCache'])).as_posix())==f.read_bytes()
   with zipfile.ZipFile(source) as original:assert z.read('classes.dex')==original.read('classes.dex')
   assert len(z.namelist())==len(set(z.namelist()))
   for site in meta['call_sites']:assert struct.unpack_from('<I',native,site)[0]>>24==0xea
- meta.update(original_apk_sha256=original_sha,apk_sha256=sha(out.read_bytes()),output=report_path(out),translation_entries=len(translations),network=net,verification='zipalign/apksigner/native-sites/managed-shapes; no device/runtime validation')
+ meta.update(original_apk_sha256=original_sha,apk_sha256=sha(out.read_bytes()),output=report_path(out),translation_entries=len(translations),network=net,logging_level=log_level,verification='zipalign/apksigner/native-sites/managed-shapes; no device/runtime validation')
+ meta.update(embedded_cache_files=len(cache_files),embedded_cache_bytes=sum(f.stat().st_size for f in cache_files))
  meta.update(startup_billing_checks='bypassed in local mode',network_trace='RTD_NET; five WWW POST sites',endpoint_audit=report_path(dist/'endpoint-audit.json'))
  (dist/'build-report.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(meta,ensure_ascii=False,indent=2))
 def unique(pairs):
