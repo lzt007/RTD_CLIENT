@@ -1,4 +1,10 @@
 {
+  "android": {
+    "debuggable": true
+  },
+  "logging": {
+    "level": "debug"
+  },
   "network": {
     "deviceHost": "127.0.0.1",
     "apiPort": 18766,
@@ -16,7 +22,7 @@
     "build": "build",
     "dist": "dist",
     "keystore": "build/development.keystore",
-    "fontSource": ""
+    "fontSource": "C:/Windows/Fonts/SIMYOU.TTF"
   },
   "tools": {
     "python": "",
@@ -31,7 +37,10 @@
     "keyPassword": "android"
   },
   "font": {
-    "size": 32,
-    "atlasSize": 2048
+    "size": 64,
+    "atlasSize": 4096,
+    "strokeWidth": 1,
+    "atlasHeight": 8192,
+    "displayScale": 0.9
   }
 }
