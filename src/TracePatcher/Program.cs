@@ -2,6 +2,14 @@ using System;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+if(args.Length==2&&args[0]=="verify-local-store") {
+ using var candidate=AssemblyDefinition.ReadAssembly(args[1]);LocalStorePatch.Verify(candidate);return;
+}
+if(args.Length==4&&args[0]=="patch-local-store") {
+ var localResolver=new DefaultAssemblyResolver();localResolver.AddSearchDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(args[1]))!);
+ using var candidate=AssemblyDefinition.ReadAssembly(args[1],new ReaderParameters{AssemblyResolver=localResolver});using var flowAssembly=AssemblyDefinition.ReadAssembly(args[2]);
+ LocalStorePatch.Apply(candidate,flowAssembly);candidate.Write(args[3]);return;
+}
 if(args.Length==3&&args[0]=="inspect-type-il") {
  using var a=AssemblyDefinition.ReadAssembly(args[1]);
  foreach(var t in a.MainModule.GetTypes().Where(t=>t.FullName==args[2]||t.FullName.StartsWith(args[2]+"/"))) {
@@ -96,6 +104,7 @@ if(args.Length>5&&args[5]=="local-api") {
  LocalBattleRestorePatch.Apply(asm);
  GzipBridge.Apply(fp,unity);
  var flow=AssemblyDefinition.ReadAssembly(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(args[1])!,"RTDFlow.dll"));
+ LocalStorePatch.Apply(asm,flow);
  NetworkTracePatch.Apply(asm,flow,log);
  var tick=mod.ImportReference(flow.MainModule.GetType("RTDFlow").Methods.First(m=>m.Name=="Tick"));
    foreach(var name in new[]{"TitleMenu","Installer","GameManager","MainMenu","MMResult","MMLogin","MMGachaCommon","MMGachaMenu","MMUnitDetail","MMUnitMenu","MMUnitPartyBase","MMUnitPartyList","MMUnitView","MMUnitSell","MMUnitUnionBase","MMUnitUnionList","MMUnitUnion","MMUnitEvoBase","MMUnitEvoList","MMUnitEvo","MMUnitSpCompBase","MMUnitSpCompList","MMUnitSpComp","MMQuest","MMEtcPresent","MMShop","MMShopAP","MMShopUnitSlot","MMShopFriend","MMEtcMenu","MMEtcChangeName","MMFriendMenu","MMFriendSearch","MMFriendList","MMFriendPost","MMFriendApply","MMFriendListSelPresent","MMHelper"}) {

@@ -9,9 +9,9 @@ from localization_contract import validate
 def sha(b):return hashlib.sha256(b).hexdigest()
 def path(s):
  p=pathlib.Path(s);return p if p.is_absolute() else ROOT/p
-def run(args):
+def run(args,cwd=ROOT):
  print('>',str(args[0]),' '.join(str(a) for a in args[1:]),flush=True)
- subprocess.run([str(a) for a in args],cwd=ROOT,check=True)
+ subprocess.run([str(a) for a in args],cwd=cwd,check=True)
 def report_path(output):
  try:return str(pathlib.Path(output).relative_to(ROOT))
  except ValueError:return str(output)
@@ -26,20 +26,20 @@ def translation_input(configured):
 def java_home(configured=''):
  if configured:
   candidate=path(configured)
-  if not all((candidate/'bin'/name).is_file() for name in ('java.exe','keytool.exe')):
-   raise ValueError('Configured tools.javaHome must contain bin/java.exe and bin/keytool.exe')
+  if not all((candidate/'bin'/name).is_file() for name in (('java.exe','keytool.exe') if os.name=='nt' else ('java','keytool'))):
+   raise ValueError('Configured tools.javaHome must contain platform java and keytool executables')
   return candidate
  candidates=[]
  if os.environ.get('JAVA_HOME'):candidates.append(pathlib.Path(os.environ['JAVA_HOME']))
  executable=shutil.which('java.exe') or shutil.which('java')
  if executable:candidates.append(pathlib.Path(executable).resolve().parent.parent)
  for candidate in candidates:
-  if all((candidate/'bin'/name).is_file() for name in ('java.exe','keytool.exe')):return candidate
+  if all((candidate/'bin'/name).is_file() for name in (('java.exe','keytool.exe') if os.name=='nt' else ('java','keytool'))):return candidate
  raise ValueError('JDK missing: set tools.javaHome, JAVA_HOME, or put JDK bin containing java/keytool on PATH')
 
 def main():
- parser=argparse.ArgumentParser();parser.add_argument('--language',choices=['ja','zh-TW','zh-CN'],default='ja');args=parser.parse_args()
- c=json.loads((ROOT/'rtd.config.json').read_text(encoding='utf-8-sig'));p=c['paths'];t=c['tools'];net=c['network']
+ parser=argparse.ArgumentParser();parser.add_argument('--config',default='rtd.config.json');parser.add_argument('--language',choices=['ja','zh-TW','zh-CN'],default='ja');args=parser.parse_args()
+ config_path=path(args.config);c=json.loads(config_path.read_text(encoding='utf-8-sig'));p=c['paths'];t=c['tools'];net=c['network']
  log_level=c.get('logging',{}).get('level','debug')
  if log_level not in ('debug','info','warning','error','none'):raise ValueError('logging.level must be debug/info/warning/error/none')
  build=path(p['build']);build.mkdir(parents=True,exist_ok=True);dist=path(p['dist']);dist.mkdir(parents=True,exist_ok=True)
@@ -64,8 +64,8 @@ def main():
  sdk=path(t['androidSdk']) if t['androidSdk'] else pathlib.Path(os.environ.get('ANDROID_HOME',str(pathlib.Path.home()/'AppData/Local/Android/Sdk')))
  if not t['androidSdk'] and not (sdk/'build-tools').is_dir() and (ROOT/'tools/android-sdk/build-tools').is_dir():sdk=ROOT/'tools/android-sdk'
  if not (sdk/'build-tools').is_dir():raise ValueError('Android SDK build-tools missing: set tools.androidSdk or ANDROID_HOME')
- if not (java/'bin/java.exe').is_file():raise ValueError('JDK missing: set tools.javaHome or JAVA_HOME')
- bt=sorted((sdk/'build-tools').iterdir())[-1];keytool=java/'bin/keytool.exe';apksigner=bt/'lib/apksigner.jar';zipalign=bt/'zipalign.exe'
+ if not (java/('bin/java.exe' if os.name=='nt' else 'bin/java')).is_file():raise ValueError('JDK missing: set tools.javaHome or JAVA_HOME')
+ bt=sorted(x for x in (sdk/'build-tools').iterdir() if x.is_dir())[-1];keytool=java/('bin/keytool.exe' if os.name=='nt' else 'bin/keytool');apksigner=bt/'lib/apksigner.jar';zipalign=bt/('zipalign.exe' if os.name=='nt' else 'zipalign')
  compiler=sorted((pathlib.Path(dotnet).parent/'sdk').glob('*/Roslyn/bincore/csc.dll'))[-1]
  def compile(name,files,extra=()):
   arguments=['/nostdlib','/target:library','/optimize+','/deterministic+','/out:'+str(build/name),'/reference:'+str(managed/'mscorlib.dll'),'/reference:'+str(managed/'UnityEngine.dll'),*extra,*[ROOT/'src'/f for f in files]]
@@ -80,7 +80,7 @@ def main():
   cache_index.append(relative+'|'+str(f.stat().st_size)+'|'+sha(f.read_bytes()))
 
  (build/'EmbeddedCacheIndex.cs').write_text('public static class EmbeddedCacheIndex { public static readonly string[] Files = new string[]{'+','.join(json.dumps(x) for x in cache_index)+'};}',encoding='utf-8')
- compile('RTDFlow.dll',['RTDFlow.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs','RTDNetworkTrace.cs','RTDEmbeddedCache.cs',str(build/'EmbeddedCacheIndex.cs')],cache_resources)
+ compile('RTDFlow.dll',['RTDFlow.cs','RTDLocalStore.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs','RTDNetworkTrace.cs','RTDEmbeddedCache.cs',str(build/'EmbeddedCacheIndex.cs')],cache_resources)
  compile('RTDRestoreCache.dll',['RTDRestoreCache.cs'],['/define:RTD_LEGACY','/reference:'+str(managed/'Assembly-CSharp.dll')])
  resources=['/resource:'+str(path(p['translation']))+',rtd.translation.json']
  font_paths=[path(p['fontPng']),path(p['fontGlyphs'])] if args.language!='ja' else [build/'no-font-ja.png',build/'no-font-ja.tsv']
@@ -94,19 +94,21 @@ def main():
  embedded.append('default:return null;}}}')
  (build/'EmbeddedLocalization.cs').write_text(''.join(embedded))
  compile('RTDLocalization.dll',['TranslationMap.cs','RTDLocalization.cs',str(build/'EmbeddedLocalization.cs')],['/reference:'+str(managed/'Assembly-CSharp.dll')]+(['/define:RTD_JAPANESE'] if args.language=='ja' else []))
- def patch(proj,args):run([dotnet,'run','-p:RTDCecilPath='+str(path(t['cecil'])),'--project',ROOT/'src'/proj,'--',*args])
+ def patch(proj,args):run([dotnet,'run','-p:RTDCecilPath='+str(path(t['cecil'])),'--project',ROOT/'src'/proj,'--',*args],cwd=managed)
  for name in ['restored.dll','notice.dll','notice-report.json','localized.dll']:(build/name).unlink(missing_ok=True)
  patch('TracePatcher',[managed,build/'Assembly-CSharp-trace.dll','no-social','resource','offline','local-api'])
  patch('RestoreCachePatcher',['apply',build/'Assembly-CSharp-trace.dll',build/'RTDRestoreCache.dll',build/'restored.dll'])
  patch('StartupNoticePatcher',['apply',build/'restored.dll',build/'notice.dll',build/'notice-report.json'])
  patch('LocalizationPatcher',[build/'notice.dll',build/'RTDLocalization.dll',managed,build/'localized.dll'])
  # Rewrite all patch-injected roots after structural patches; original sources remain untouched.
- patch('EndpointPatcher',[build/'localized.dll',build/'Assembly-CSharp.dll',str(ROOT/'rtd.config.json')])
+ patch('EndpointPatcher',[build/'localized.dll',build/'Assembly-CSharp.dll',str(config_path)])
  patch('TracePatcher',['embed-cache-hook',build/'Assembly-CSharp.dll',build/'RTDFlow.dll'])
  patch('LoaderTests',[])
+ patch('LocalStoreTests',[])
  patch('LocalizationTests',[managed/'Assembly-CSharp.dll',build/'Assembly-CSharp.dll'])
  patch('TracePatcher',['verify-local-platform',build/'Assembly-CSharp.dll']);patch('TracePatcher',['verify-local-battle-restore',build/'Assembly-CSharp.dll'])
  patch('TracePatcher',['verify-network-trace',build/'Assembly-CSharp.dll'])
+ patch('TracePatcher',['verify-local-store',build/'Assembly-CSharp.dll'])
  for assembly in ['Assembly-CSharp.dll','Assembly-CSharp-firstpass-trace.dll','RTDFlow.dll','RTDRestoreCache.dll','RTDLocalization.dll']:
   patch('TracePatcher',['filter-logs',build/assembly,log_level])
  shutil.copyfile(build/'endpoint-audit.json',dist/'endpoint-audit.json')
@@ -128,8 +130,8 @@ def main():
   for name,value in replacements.items():dst.writestr(name,value)
  run([zipalign,'-f','-p','4',unsigned,aligned]);key=path(p['keystore']);key.parent.mkdir(parents=True,exist_ok=True);sign=c['signing']
  if not key.exists():run([keytool,'-genkeypair','-keystore',key,'-storepass',sign['storePassword'],'-keypass',sign['keyPassword'],'-alias',sign['alias'],'-keyalg','RSA','-keysize','2048','-validity','3650','-dname','CN=RTD Local Development','-storetype','JKS'])
- run([java/'bin/java.exe','-jar',apksigner,'sign','--ks',key,'--ks-key-alias',sign['alias'],'--ks-pass','pass:'+sign['storePassword'],'--key-pass','pass:'+sign['keyPassword'],'--min-sdk-version','14','--out',out,aligned])
- run([zipalign,'-c','-p','4',out]);run([java/'bin/java.exe','-jar',apksigner,'verify','--verbose','--print-certs',out])
+ run([java/('bin/java.exe' if os.name=='nt' else 'bin/java'),'-jar',apksigner,'sign','--ks',key,'--ks-key-alias',sign['alias'],'--ks-pass','pass:'+sign['storePassword'],'--key-pass','pass:'+sign['keyPassword'],'--min-sdk-version','14','--out',out,aligned])
+ run([zipalign,'-c','-p','4',out]);run([java/('bin/java.exe' if os.name=='nt' else 'bin/java'),'-jar',apksigner,'verify','--verbose','--print-certs',out])
  with zipfile.ZipFile(out) as z:
   assert z.read(NATIVE_MEMBER)==native
   assert z.read('lib/armeabi-v7a/libunity.so')==native
