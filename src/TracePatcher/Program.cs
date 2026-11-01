@@ -2,11 +2,24 @@ using System;
 using System.Linq;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+if(args.Length==3&&args[0]=="inspect-type-il") {
+ using var a=AssemblyDefinition.ReadAssembly(args[1]);
+ foreach(var t in a.MainModule.GetTypes().Where(t=>t.FullName==args[2]||t.FullName.StartsWith(args[2]+"/"))) {
+  Console.WriteLine("TYPE "+t.FullName);foreach(var f in t.Fields)Console.WriteLine("FIELD "+f.FullName);
+  foreach(var m in t.Methods) {Console.WriteLine("METHOD "+m.FullName);if(m.HasBody)foreach(var ins in m.Body.Instructions)Console.WriteLine(ins);}
+ }return;
+}
 if(args.Length==3&&args[0]=="embed-cache-hook") {
  using var a=AssemblyDefinition.ReadAssembly(args[1],new ReaderParameters{InMemory=true});using var helper=AssemblyDefinition.ReadAssembly(args[2]);
  var ensure=a.MainModule.ImportReference(helper.MainModule.GetType("RTDEmbeddedCache").Methods.Single(m=>m.Name=="Ensure"));int count=0;
  foreach(var t in a.MainModule.GetTypes())foreach(var m in t.Methods.Where(m=>m.HasBody)) {
-  if((t.Name=="TitleMenu"||t.Name=="Installer")&&m.Name=="Awake") {m.Body.GetILProcessor().InsertBefore(m.Body.Instructions[0],Instruction.Create(OpCodes.Call,ensure));count++;}
+  if((t.Name=="TitleMenu"||t.Name=="Installer"||t.Name=="AssetBundleLoader")&&m.Name=="Awake") {m.Body.GetILProcessor().InsertBefore(m.Body.Instructions[0],Instruction.Create(OpCodes.Call,ensure));count++;}
+ }
+ foreach(var t in a.MainModule.GetTypes())foreach(var m in t.Methods.Where(m=>m.HasBody))foreach(var ins in m.Body.Instructions) {
+  if(ins.OpCode!=OpCodes.Call||ins.Operand is not MethodReference target)continue;
+  if((target.DeclaringType.FullName=="UnityEngine.Caching"&&target.Name=="IsVersionCached")||
+     (target.DeclaringType.FullName=="UnityEngine.WWW"&&target.Name=="LoadFromCacheOrDownload"&&target.Parameters.Count==2))
+   ins.Operand=a.MainModule.ImportReference(helper.MainModule.GetType("RTDEmbeddedCache").Methods.Single(x=>x.Name==target.Name));
  }
  if(count<1)throw new Exception("Missing resource bootstrap entry");a.Write(args[1]);Console.WriteLine("Embedded cache startup hooks: "+count);return;
 }

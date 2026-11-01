@@ -45,6 +45,26 @@
 
 构建必须提供非空 `paths.resourceCache`（默认 `resources/UnityCache`），将 Shared 下全部文件加入 APK 的 assets/rtd-cache，构建末尾逐文件对比打包内容。生成的索引记录相对路径、字节数和 SHA256；构建报告记录资源数量和总字节数。
 
-TitleMenu/Installer 的 Awake 在原始逻辑前调用 RTDEmbeddedCache.Ensure，通过 Android getCacheDir 定位 UnityCache，使用 Java 文件通道分块释放。不会复制用户存档。每个文件完成后写入以资源 SHA256 命名的完成标记，后续启动依据标记和长度跳过；中断无标记的文件重新释放。释放异常会抛出，不把未完成的释放标记成成功。当前实现不对已释放文件每次重新计算哈希；需要强制恢复相同长度的损坏文件时删除对应 .rtd-* 标记。
+AssetBundleLoader/TitleMenu/Installer 的 Awake 在原始逻辑前调用 RTDEmbeddedCache.Ensure，通过 Unity Application.persistentDataPath 定位 UnityCache，使用 Java 文件通道分块释放。不会复制用户存档。每个文件完成后写入以资源 SHA256 命名的完成标记，后续启动依据标记和长度跳过；中断无标记的文件重新释放。释放异常会抛出，不把未完成的释放标记成成功。当前实现不对已释放文件每次重新计算哈希；需要强制恢复相同长度的损坏文件时删除对应 .rtd-* 标记。
 
-首次释放同步执行，启动画面可能停留较久；需要额外约 283 MB 可用空间。系统清理缓存后会重新释放。已有资源完整且与服务器索引一致时可避免资源包下载；登录、索引及游戏 API 仍访问服务器，缺失或新版资源仍可能下载。旧版引擎实际缓存识别、首次启动耗时和断网资源加载仍需真机验收。
+首次释放同步执行，需要额外约 283 MB 可用空间。释放缓存时刷新 __info 第二行的最后使用 Unix 时间戳，避免原备份的 2014 年时间被 Unity 缓存过期逻辑淘汰；之后启动保留已释放载荷并刷新元数据。系统清理缓存后会重新释放。登录、公告及游戏 API 仍访问服务器，服务器以后新增的资源不属于现有内置资源范围。
+
+2026-10-31 已在连接手机验证：清除全部 180 个已知资源文件及完成标记后，只从 APK 重新释放，76 个启动资源全部通过 Caching.IsVersionCached（0 miss），唯一的 LoadFromCacheOrDownload 调用也命中缓存。验证时开启未命中即抛错的保护，阻止网络回退；普通重启再次 76/76 命中，复制 0 文件。原日志 Download Start_0 是原始程序对首个音频资源的固定分支名称，不代表网络下载。详见 docs/内置资源免下载验证.md。
+
+调试维护：在内部 files/ 创建 rtd-reseed-cache 标记，可在下次启动前删除全部已知缓存条目并重新释放（保留账号）；成功后标记自动删除。创建 rtd-assert-cache 可禁止缓存未命中时退回网络下载，验证后手动删除。两个标记默认均不存在。验证日志可用 python scripts/verify_cache_runtime.py build/cache-reseed-runtime.txt build/cache-restart-runtime.txt 检查。
+
+APK 调试：rtd.config.json 的 android.debuggable 当前为 true，重新打包后允许 adb shell run-as jp.co.acquire.RTD 访问应用私有目录；设为 false 可关闭。需要安装新 APK 后才生效。
+
+## 日文与繁体中文构建
+
+`./build.ps1 -Language ja` 构建无翻译、无替换字体的日文包 `dist/rtd-client-ja.apk`（默认）。`./build.ps1 -Language zh-TW` 构建繁中包 `dist/rtd-client-zh-TW.apk`。Python 等价参数为 `--language ja` 或 `--language zh-TW`。报告按语言保存为 build-report-ja.json / build-report-zh-TW.json。
+
+繁中包现嵌入台服 738 条通过格式与字形校验的译文及 5418 字形、33 像素系统位图字库。来源为 RTD_TRANSLATION/analysis/tw-apk；未导入冲突、格式不兼容或缺字候选。场景对象跨版本未建立可靠对应，未按 ID 猜配。未覆盖服务端主表全部剧情。日文包忽略设备外置翻译；繁中包保留外置覆盖机制。尚待设备显示验收。
+
+## 2026-11-01 繁體翻譯成果整合
+
+已由 handoff/RTD-translation-complete-20261101.zip 導入9693條有效繁體譯文，同步RTD_TRANSLATION，全部通過字形、占位符與NGUI標籤校驗。繁中包沿用台服5418字形字庫。handoff/已加入Git忽略，未追蹤。交付勘誤清單中的59條既有譯文建議依保留既有譯文要求尚未套用，詳見RTD_TRANSLATION/metadata/legacy-translation-errata.csv。靜態打包不代表真機字形、長文本排版或全部運行時文字覆蓋已驗收。
+
+## 简体版打包
+
+`./build.ps1 -Language zh-CN` 或 `python scripts/build.py --language zh-CN`，输出 `dist/rtd-client-zh-CN.apk`，报告 `dist/build-report-zh-CN.json`。当前本地翻译与字体为9693条简体译文及6015码点幼圆加粗字库（64像素，4096×8192）。中文构建使用paths指定的实际资源，zh-TW参数不会自动转换当前简体内容；重新构建繁体版需先恢复对应资源。

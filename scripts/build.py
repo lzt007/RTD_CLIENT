@@ -1,8 +1,9 @@
 """Standalone original-APK maintenance chain. Does not contact or install devices."""
+import argparse
 import pathlib,json,os,shutil,subprocess,zipfile,hashlib,struct,copy,re,sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 from native_input import patch_native,NATIVE_MEMBER
-from android_launcher import patch_launcher
+from android_launcher import patch_launcher,set_debuggable
 from localization_contract import validate
 
 def sha(b):return hashlib.sha256(b).hexdigest()
@@ -37,10 +38,13 @@ def java_home(configured=''):
  raise ValueError('JDK missing: set tools.javaHome, JAVA_HOME, or put JDK bin containing java/keytool on PATH')
 
 def main():
+ parser=argparse.ArgumentParser();parser.add_argument('--language',choices=['ja','zh-TW','zh-CN'],default='ja');args=parser.parse_args()
  c=json.loads((ROOT/'rtd.config.json').read_text(encoding='utf-8-sig'));p=c['paths'];t=c['tools'];net=c['network']
  log_level=c.get('logging',{}).get('level','debug')
  if log_level not in ('debug','info','warning','error','none'):raise ValueError('logging.level must be debug/info/warning/error/none')
  build=path(p['build']);build.mkdir(parents=True,exist_ok=True);dist=path(p['dist']);dist.mkdir(parents=True,exist_ok=True)
+ if args.language=='ja':
+  p=dict(p);p['translation']=str(build/'translation-ja.json');path(p['translation']).write_text('{}',encoding='utf-8')
  translation_path=translation_input(p['translation'])
  translations=validate(json.loads(translation_path.read_text(encoding='utf-8-sig'),object_pairs_hook=unique))
  source=path(p['originalApk']);original_sha=sha(source.read_bytes())
@@ -50,7 +54,7 @@ def main():
   for name in z.namelist():
    if name.startswith('assets/bin/Data/Managed/') and name.endswith('.dll'):(managed/pathlib.Path(name).name).write_bytes(z.read(name))
   native,meta=patch_native(z.read(NATIVE_MEMBER));scene=bytearray(z.read('assets/bin/Data/level0'))
-  manifest=patch_launcher(z.read('AndroidManifest.xml'))
+  manifest=set_debuggable(patch_launcher(z.read('AndroidManifest.xml')),c.get('android',{}).get('debuggable',False))
   mono=z.read('assets/libs/armeabi-v7a/libmono.so')
  old=bytes(scene[24320:24404]);assert len(old)==84 and struct.unpack_from('<I',old,72)[0]==20021
  def string(s):
@@ -79,7 +83,8 @@ def main():
  compile('RTDFlow.dll',['RTDFlow.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs','RTDNetworkTrace.cs','RTDEmbeddedCache.cs',str(build/'EmbeddedCacheIndex.cs')],cache_resources)
  compile('RTDRestoreCache.dll',['RTDRestoreCache.cs'],['/define:RTD_LEGACY','/reference:'+str(managed/'Assembly-CSharp.dll')])
  resources=['/resource:'+str(path(p['translation']))+',rtd.translation.json']
- font_paths=[path(p['fontPng']),path(p['fontGlyphs'])]
+ font_paths=[path(p['fontPng']),path(p['fontGlyphs'])] if args.language!='ja' else [build/'no-font-ja.png',build/'no-font-ja.tsv']
+ if args.language!='ja' and not all(x.exists() for x in font_paths):raise ValueError('Chinese build requires font PNG and TSV')
  if any(x.exists() for x in font_paths):
   if not all(x.exists() for x in font_paths):raise ValueError('fontPng and fontGlyphs must both exist')
   resources+=['/resource:'+str(font_paths[0])+',rtd.font.png','/resource:'+str(font_paths[1])+',rtd.font.tsv']
@@ -88,7 +93,7 @@ def main():
   if filepath.exists():embedded.append('case '+json.dumps(filename)+':return new byte[]{'+','.join(str(b) for b in filepath.read_bytes())+'};')
  embedded.append('default:return null;}}}')
  (build/'EmbeddedLocalization.cs').write_text(''.join(embedded))
- compile('RTDLocalization.dll',['TranslationMap.cs','RTDLocalization.cs',str(build/'EmbeddedLocalization.cs')],['/reference:'+str(managed/'Assembly-CSharp.dll')])
+ compile('RTDLocalization.dll',['TranslationMap.cs','RTDLocalization.cs',str(build/'EmbeddedLocalization.cs')],['/reference:'+str(managed/'Assembly-CSharp.dll')]+(['/define:RTD_JAPANESE'] if args.language=='ja' else []))
  def patch(proj,args):run([dotnet,'run','-p:RTDCecilPath='+str(path(t['cecil'])),'--project',ROOT/'src'/proj,'--',*args])
  for name in ['restored.dll','notice.dll','notice-report.json','localized.dll']:(build/name).unlink(missing_ok=True)
  patch('TracePatcher',[managed,build/'Assembly-CSharp-trace.dll','no-social','resource','offline','local-api'])
@@ -115,7 +120,7 @@ def main():
  replacements['assets/rtd-localization/translation.json']=path(p['translation']).read_bytes()
  for filename,filepath in zip(['font.png','font.tsv'],font_paths):
   if filepath.exists():replacements['assets/rtd-localization/'+filename]=filepath.read_bytes()
- unsigned=build/'unsigned.apk';aligned=build/'aligned.apk';out=dist/'rtd-client.apk'
+ unsigned=build/'unsigned.apk';aligned=build/'aligned.apk';out=dist/('rtd-client-'+args.language+'.apk')
  with zipfile.ZipFile(source) as src,zipfile.ZipFile(unsigned,'w',zipfile.ZIP_DEFLATED) as dst:
   for info in src.infolist():
    if info.filename.upper().startswith('META-INF/'):continue
@@ -135,9 +140,11 @@ def main():
   assert len(z.namelist())==len(set(z.namelist()))
   for site in meta['call_sites']:assert struct.unpack_from('<I',native,site)[0]>>24==0xea
  meta.update(original_apk_sha256=original_sha,apk_sha256=sha(out.read_bytes()),output=report_path(out),translation_entries=len(translations),network=net,logging_level=log_level,verification='zipalign/apksigner/native-sites/managed-shapes; no device/runtime validation')
+ meta.update(language=args.language)
+ meta.update(android_debuggable=c.get('android',{}).get('debuggable',False))
  meta.update(embedded_cache_files=len(cache_files),embedded_cache_bytes=sum(f.stat().st_size for f in cache_files))
  meta.update(startup_billing_checks='bypassed in local mode',network_trace='RTD_NET; five WWW POST sites',endpoint_audit=report_path(dist/'endpoint-audit.json'))
- (dist/'build-report.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(meta,ensure_ascii=False,indent=2))
+ (dist/('build-report-'+args.language+'.json')).write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(meta,ensure_ascii=False,indent=2))
 def unique(pairs):
  d={}
  for k,v in pairs:

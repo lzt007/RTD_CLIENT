@@ -68,3 +68,34 @@ def patch_launcher(data):
     output = b[:8] + b''.join(chunk for _, chunk in result)
     assert len(output) == len(b)
     return output
+
+
+def set_debuggable(data, enabled):
+    """Set the existing typed Android application debuggable attribute."""
+    if not isinstance(enabled, bool):
+        raise ValueError('android.debuggable must be a boolean')
+    b = bytearray(data)
+    pos = 8
+    strings = []
+    changed = 0
+    while pos < len(b):
+        kind, header, size = struct.unpack_from('<HHI', b, pos)
+        if kind == 1:
+            count, _, flags, start = struct.unpack_from('<IIII', b, pos + 8)
+            assert not flags & 0x100
+            for i in range(count):
+                q = pos + start + struct.unpack_from('<I', b, pos + header + i * 4)[0]
+                length = struct.unpack_from('<H', b, q)[0]
+                strings.append(bytes(b[q+2:q+2+length*2]).decode('utf-16le'))
+        if kind == 0x102 and strings[struct.unpack_from('<I', b, pos+20)[0]] == 'application':
+            offset, width, count = struct.unpack_from('<HHH', b, pos+24)
+            for i in range(count):
+                q = pos + 16 + offset + i * width
+                if strings[struct.unpack_from('<I', b, q+4)[0]] == 'debuggable':
+                    assert b[q+15] == 0x12, 'Expected boolean debuggable attribute'
+                    struct.pack_into('<I', b, q+8, 0xffffffff)
+                    struct.pack_into('<I', b, q+16, 0xffffffff if enabled else 0)
+                    changed += 1
+        pos += size
+    assert changed == 1, 'Expected one application debuggable attribute'
+    return bytes(b)

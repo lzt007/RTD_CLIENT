@@ -6,7 +6,13 @@ using UnityEngine;
 public static class RTDLocalization {
  static bool loaded,fontAttempted;static Dictionary<string,bool> formatted=new Dictionary<string,bool>();static Dictionary<string,string> map=new Dictionary<string,string>();static UIFont replacement;
  public static void ProtectInput(UIInput input){if(input!=null&&input.label!=null)if(input.label.GetComponent(typeof(RTDInputProtected))==null)input.label.gameObject.AddComponent(typeof(RTDInputProtected));}
- static byte[] Read(string name){string path=Application.persistentDataPath+"/rtd-localization/"+name;if(File.Exists(path))return File.ReadAllBytes(path);return EmbeddedLocalization.Read(name);}
+ static byte[] Read(string name){
+#if RTD_JAPANESE
+return EmbeddedLocalization.Read(name);
+#else
+string path=Application.persistentDataPath+"/rtd-localization/"+name;if(File.Exists(path))return File.ReadAllBytes(path);return EmbeddedLocalization.Read(name);
+#endif
+}
 
  static string Text(byte[] data){return data==null?null:new System.Text.UTF8Encoding(false,true).GetString(data);}
  static void Load(){if(loaded)return;loaded=true;try {byte[] raw=Read("translation.json");if(raw!=null)map=TranslationMap.Parse(Text(raw));}catch(Exception){map.Clear();Debug.Log("RTD localization: missing/invalid mapping; original text retained");}}

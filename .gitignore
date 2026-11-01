@@ -12,3 +12,4 @@ inputs/localization/*.tsv
 .venv/
 inputs/localization/translation.json
 .idea/
+handoff/
