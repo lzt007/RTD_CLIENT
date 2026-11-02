@@ -104,7 +104,7 @@ def main():
  patch('EndpointPatcher',[build/'localized.dll',build/'Assembly-CSharp.dll',str(config_path)])
  patch('TracePatcher',['embed-cache-hook',build/'Assembly-CSharp.dll',build/'RTDFlow.dll'])
  patch('LoaderTests',[])
- patch('LocalStoreTests',[])
+ patch('LocalStoreTests',[managed/'Assembly-CSharp.dll'])
  patch('LocalizationTests',[managed/'Assembly-CSharp.dll',build/'Assembly-CSharp.dll'])
  patch('TracePatcher',['verify-local-platform',build/'Assembly-CSharp.dll']);patch('TracePatcher',['verify-local-battle-restore',build/'Assembly-CSharp.dll'])
  patch('TracePatcher',['verify-network-trace',build/'Assembly-CSharp.dll'])

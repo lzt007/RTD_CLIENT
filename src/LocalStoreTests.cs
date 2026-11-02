@@ -11,7 +11,7 @@ namespace UnityEngine {
   public static void DeleteKey(string k){values.Remove(k);}public static void Save(){}
  }
 }
-class Row {public string id="rtd_item_10010",name="six";public int price=450,point=6;}
+class Row {public string id="rtd_item_10010",name="six";public uint price=450,point=6;}
 class ClientData {public static Row[] rows=new[]{new Row()};public static Row[] GetShopProductMaster(){return rows;}}
 class AndroidProduct {public string id{get;private set;}public AndroidProduct(string i,string n,int p,int point,string text){id=i;}}
 class Singleton<T> where T:new(){public static T Instance=new T();}
@@ -28,7 +28,13 @@ class Store:MonoBehaviour {
 class LocalStoreTests {
  static void Check(bool ok,string message){if(!ok)throw new Exception(message);}
  static void Run(IEnumerator e){while(e.MoveNext()){}}
- public static void Main(){
+ public static void Main(string[] args){
+  if(args.Length==1) {
+   var game=System.Reflection.Assembly.LoadFrom(args[0]);var rowType=game.GetType("MasterDataRTD.ShopProductMaster");var row=Activator.CreateInstance(rowType);
+   rowType.GetField("id").SetValue(row,"rtd_item_10010");rowType.GetField("name").SetValue(row,"six");rowType.GetField("price").SetValue(row,(uint)450);rowType.GetField("point").SetValue(row,(uint)6);
+   var actual=RTDLocalStore.CreateProduct(game.GetType("AndroidProduct"),row);Check((string)actual.GetType().GetProperty("id").GetValue(actual,null)=="rtd_item_10010","original DLL product constructor");
+   Console.WriteLine("Original DLL catalog types and product constructor passed");
+  }
   ClientData.rows=null;var loading=new Store();RTDLocalStore.Initialize(loading);Check(!RTDLocalStore.ProductsReady(loading),"wait for master data");ClientData.rows=new[]{new Row()};Check(RTDLocalStore.ProductsReady(loading),"retry once masters arrive");
   var store=new Store();Check(!RTDLocalStore.HasPending(),"no startup settlement without receipt");RTDLocalStore.Initialize(store);Check(RTDLocalStore.ProductsReady(store),"first shop entry must load products without SDK callback");
   Check(store.mb_InitSuccess&&store.mb_SkuCheckSuccess&&store.m_AndroidProductList.Length==1,"offline catalog");

@@ -32,10 +32,13 @@ public static class RTDLocalStore {
   Array list=Array.CreateInstance(product,rows==null?0:rows.Length);
   for(int i=0;i<list.Length;i++) {
    object row=rows.GetValue(i);
-   list.SetValue(Activator.CreateInstance(product,new object[]{Get(row,"id"),"SIM / "+Get(row,"name"),0,Get(row,"point"),"LOCAL SIMULATION - NO PAYMENT"}),i);
+   list.SetValue(CreateProduct(product,row),i);
   }
   Set(store,"m_AndroidProductList",list);Set(store,"mb_GetProductData",true);
   Set(store,"mb_SkuCheckSuccess",list.Length>0);Set(store,"mb_Connecting",false);
+ }
+ public static object CreateProduct(Type product,object row) {
+  return Activator.CreateInstance(product,new object[]{Get(row,"id"),"SIM / "+Get(row,"name"),0,Convert.ToInt32(Get(row,"point")),"LOCAL SIMULATION - NO PAYMENT"});
  }
  public static IEnumerator LoadProducts(object store) { Products(store);return Empty(); }
  static void SetReceipt(object store,string receipt) {
