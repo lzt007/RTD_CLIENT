@@ -12,7 +12,7 @@ namespace UnityEngine {
  }
 }
 class Row {public string id="rtd_item_10010",name="six";public int price=450,point=6;}
-class ClientData {public static Row[] GetShopProductMaster(){return new[]{new Row()};}}
+class ClientData {public static Row[] rows=new[]{new Row()};public static Row[] GetShopProductMaster(){return rows;}}
 class AndroidProduct {public string id{get;private set;}public AndroidProduct(string i,string n,int p,int point,string text){id=i;}}
 class Singleton<T> where T:new(){public static T Instance=new T();}
 class ComManager:Singleton<ComManager> {
@@ -29,7 +29,8 @@ class LocalStoreTests {
  static void Check(bool ok,string message){if(!ok)throw new Exception(message);}
  static void Run(IEnumerator e){while(e.MoveNext()){}}
  public static void Main(){
-  var store=new Store();Check(!RTDLocalStore.HasPending(),"no startup settlement without receipt");RTDLocalStore.Initialize(store);RTDLocalStore.Products(store);
+  ClientData.rows=null;var loading=new Store();RTDLocalStore.Initialize(loading);Check(!RTDLocalStore.ProductsReady(loading),"wait for master data");ClientData.rows=new[]{new Row()};Check(RTDLocalStore.ProductsReady(loading),"retry once masters arrive");
+  var store=new Store();Check(!RTDLocalStore.HasPending(),"no startup settlement without receipt");RTDLocalStore.Initialize(store);Check(RTDLocalStore.ProductsReady(store),"first shop entry must load products without SDK callback");
   Check(store.mb_InitSuccess&&store.mb_SkuCheckSuccess&&store.m_AndroidProductList.Length==1,"offline catalog");
   RTDLocalStore.Purchase(store,0,0);string receipt=store.m_OriginalJson;
   Check(RTDLocalStore.HasPending(),"startup settlement detects local receipt");

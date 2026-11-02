@@ -20,9 +20,14 @@ public static class RTDLocalStore {
   if(receipt.Length>0) { SetReceipt(store,receipt);Set(store,"mb_PaymentSuccess",true);Set(store,"mb_PaymentBegin",true); }
  }
  public static IEnumerator Init(object store) { Initialize(store);return Empty(); }
+ public static bool ProductsReady(object store) {
+  if(!(bool)Get(store,"mb_GetProductData"))Products(store);
+  return (bool)Get(store,"mb_GetProductData");
+ }
  public static void Products(object store) {
   Type client=store.GetType().Assembly.GetType("ClientData");
   Array rows=(Array)client.GetMethod("GetShopProductMaster",Flags).Invoke(null,null);
+  if(rows==null||rows.Length==0) { Set(store,"mb_GetProductData",false);Set(store,"mb_SkuCheckSuccess",false);return; }
   Type product=store.GetType().Assembly.GetType("AndroidProduct");
   Array list=Array.CreateInstance(product,rows==null?0:rows.Length);
   for(int i=0;i<list.Length;i++) {

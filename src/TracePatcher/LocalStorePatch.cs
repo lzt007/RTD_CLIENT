@@ -11,6 +11,7 @@ static class LocalStorePatch {
   var com=assembly.MainModule.GetType("ComManager");
   if(!com.Fields.Any(f=>f.Name=="m_LastError")||!assembly.MainModule.GetType("Singleton`1").Fields.Any(f=>f.Name=="Instance"))throw new Exception("Local settlement singleton/error contract changed");
   foreach(var name in new[]{"EntryEvent","OnDestroy","ClearReceiptData"})Reset(store.Methods.Single(m=>m.Name==name)).Emit(OpCodes.Ret);
+  Redirect(assembly,flow,"get_isProductLoadFinish","ProductsReady",0);
   Redirect(assembly,flow,"Start","Initialize",0);
   Redirect(assembly,flow,"Coroutin_Init","Init",0);
   Redirect(assembly,flow,"GetProductData","Products",0);
@@ -48,7 +49,7 @@ static class LocalStorePatch {
  }
  public static void Verify(AssemblyDefinition assembly) {
   var store=assembly.MainModule.GetType("StoreManager");
-  foreach(var name in new[]{"Start","Coroutin_Init","GetProductData","Coroutine_GetProduct","UpdateProductID","OpenPaymentDialog","Coroutin_ConsumeProduct"}) {
+  foreach(var name in new[]{"get_isProductLoadFinish","Start","Coroutin_Init","GetProductData","Coroutine_GetProduct","UpdateProductID","OpenPaymentDialog","Coroutin_ConsumeProduct"}) {
    var method=store.Methods.Single(m=>m.Name==name&&(name!="GetProductData"||m.Parameters.Count==0));
    var calls=method.Body.Instructions.Where(i=>i.Operand is MethodReference).Select(i=>(MethodReference)i.Operand).ToArray();
    if(calls.Length!=1||calls[0].DeclaringType.FullName!="RTDLocalStore")throw new Exception("Local store bypass missing: "+name);
