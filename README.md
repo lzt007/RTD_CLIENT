@@ -23,8 +23,10 @@
 | build | 从原 APK 提取的程序集、编译中间文件、开发 keystore |
 | dist | 签名 APK、构建报告 |
 | tools | 本机工具/Mono.Cecil 二进制，不进 Git |
+| diagnostics/settlement | 独立通关阶段诊断候选，不属于默认 APK 构建 |
+| docs/protocol | 已脱敏的协议、事务和网络边界归档 |
 
-详见 [部署与开发](docs/开发部署.md)、[翻译与字体](docs/翻译字体.md)。当前默认翻译表为 `{}`；并未完成全量汉化，也未进行设备界面/字体/内存验收。
+详见 [部署与开发](docs/开发部署.md)、[翻译与字体](docs/翻译字体.md)。仓库的初始化翻译示例为 `{}`，不代表本机部署词条为空；当前翻译与字体状态见下方简体版打包说明，仍不等于全量运行时文字及设备显示验收。
 
 默认构建已包含 Java JNI 桥接、桌面 Unity 入口、真实 Unity/Mono 库直载，以及本地模式跳过旧 Google 内购启动检查。游戏 API、调试环境地址与备用下载地址统一使用根配置；网络日志使用 `RTD_NET` 前缀，覆盖实际请求创建、完成、等待和异常。红米 K80 / Android 16 已进入游戏并完成注册、鉴权和登录通信，详见 [Android 16 启动修复](docs/Android16启动修复.md)。
 
@@ -39,7 +41,6 @@
 应用内部文件路径为 `/data/data/jp.co.acquire.RTD/files/`（通常对应 `/data/user/0/jp.co.acquire.RTD/files/`），不是 `/data/jp.co.acquire.RTD`。普通文件管理器受 Android 沙箱限制，无法访问。安装本身也不会把所有 APK 资源复制到该目录；文件通常在首次运行及下载后产生。翻译等内置资源保留在 APK 内；本仓库 resources/UnityCache 现随 APK 打包，启动时释放到应用缓存目录。
 
 可尝试 `adb shell run-as jp.co.acquire.RTD ls -la files`。只有 debuggable APK 才支持 run-as；若返回 package not debuggable，需使用可调试构建，或在已 root 的测试设备使用 `adb shell su -c 'ls -la /data/data/jp.co.acquire.RTD/files'`。普通存储权限不会开放私有目录。导出单个文件可用 `cmd.exe /c "adb exec-out run-as jp.co.acquire.RTD cat files/文件名 > 导出文件名"`，避免旧版 PowerShell 重定向破坏二进制文件。外部应用目录也可检查 `/sdcard/Android/data/jp.co.acquire.RTD/files/`；Unity persistentDataPath 的实际位置取决于引擎与设备，不能仅凭内部目录为空判断保存失败。
-
 
 ## 内置下载资源
 
@@ -59,7 +60,7 @@ APK 调试：rtd.config.json 的 android.debuggable 当前为 true，重新打�
 
 `./build.ps1 -Language ja` 构建无翻译、无替换字体的日文包 `dist/rtd-client-ja.apk`（默认）。`./build.ps1 -Language zh-TW` 构建繁中包 `dist/rtd-client-zh-TW.apk`。Python 等价参数为 `--language ja` 或 `--language zh-TW`。报告按语言保存为 build-report-ja.json / build-report-zh-TW.json。
 
-繁中包现嵌入台服 738 条通过格式与字形校验的译文及 5418 字形、33 像素系统位图字库。来源为 RTD_TRANSLATION/analysis/tw-apk；未导入冲突、格式不兼容或缺字候选。场景对象跨版本未建立可靠对应，未按 ID 猜配。未覆盖服务端主表全部剧情。日文包忽略设备外置翻译；繁中包保留外置覆盖机制。尚待设备显示验收。
+早期繁中包嵌入台服 738 条通过格式与字形校验的译文及 5418 字形、33 像素系统位图字库；该数量已被后续9693条成果整合更新，不代表当前本地构建输入。来源为 RTD_TRANSLATION/analysis/tw-apk；未导入冲突、格式不兼容或缺字候选。场景对象跨版本未建立可靠对应，未按 ID 猜配。未覆盖服务端主表全部剧情。日文包忽略设备外置翻译；繁中包保留外置覆盖机制。尚待设备显示验收。
 
 ## 2026-11-01 繁體翻譯成果整合
 
@@ -68,3 +69,10 @@ APK 调试：rtd.config.json 的 android.debuggable 当前为 true，重新打�
 ## 简体版打包
 
 `./build.ps1 -Language zh-CN` 或 `python scripts/build.py --language zh-CN`，输出 `dist/rtd-client-zh-CN.apk`，报告 `dist/build-report-zh-CN.json`。当前本地翻译与字体为9693条简体译文及6015码点幼圆加粗字库（64像素，4096×8192）。中文构建使用paths指定的实际资源，zh-TW参数不会自动转换当前简体内容；重新构建繁体版需先恢复对应资源。
+
+## 协议归档与通关诊断（2026-11-06）
+
+- [协议索引](docs/protocol/INDEX.md)及[网络边界](docs/protocol/NETWORK_SURFACE.md)保存协议与静态定位依据；历史端点已脱敏，归档不能当作当前生产配置或全接口验收结果。
+- [通关阶段诊断候选](diagnostics/settlement/README.md)是独立Mono.Cecil工具，按固定程序集SHA256限制输入，插入阶段标记并回读校验原指令、跳转与异常区域。2026-11-06已通过C#编译检查；既有结构验证不等于Android实机验证。
+- 该候选未接入默认构建，也未据此发布新APK。资源存在、下载成功及模型显示正常不能证明通关或释放阶段不再闪退；当前仍保留这一未解决状态。
+- 活动开放与解锁由目标服务端运营配置、原前置及活动积分共同决定。服务端当前修复与生产资源审计见RTD_SERVER项目，不能用客户端本地缓存或开发数据库代替生产开放列表。
