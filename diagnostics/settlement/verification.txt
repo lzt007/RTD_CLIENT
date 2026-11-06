@@ -1,0 +1,6 @@
+Input SHA256: c2da3b5f4d9f2d04e4987442a9cd384c8dbb23fd216fb514b58c1dcaedc6add1
+Output SHA256: c3ba11595f0ac80ade6443b0301fe76327ead782521c1af5d1d0bfe37116b3cd
+Marker sites: 79
+Verified all original method opcode/operand sequences, normalized branch targets and exception boundaries after stripping marker pairs.
+AssemblyReferences sequence unchanged; helper Exception uses original corelib scope. Cecil recomputes maxstack on write; original method maxstack reserve increased by one before write.
+No APK generated or deployed. Runtime/native behavior unverified.
