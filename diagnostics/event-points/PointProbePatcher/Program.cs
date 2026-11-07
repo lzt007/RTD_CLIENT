@@ -11,10 +11,16 @@ if (args.Length != 7)
 if (args[6] != "0" && args[6] != "1")
     throw new ArgumentException("restore-flow-logs must be 0 or 1");
 
-using var original = AssemblyDefinition.ReadAssembly(args[0]);
-using var helper = AssemblyDefinition.ReadAssembly(args[1]);
-using var game = AssemblyDefinition.ReadAssembly(args[2]);
-using var unity = AssemblyDefinition.ReadAssembly(args[3]);
+// Resolve Unity's stripped runtime beside the inputs, not the host .NET GAC.
+// Cecil may resolve enum constants while writing even without explicit Resolve().
+using var resolver = new DefaultAssemblyResolver();
+foreach (var input in args.Take(4))
+    resolver.AddSearchDirectory(Path.GetDirectoryName(Path.GetFullPath(input))!);
+var reader = new ReaderParameters { AssemblyResolver = resolver };
+using var original = AssemblyDefinition.ReadAssembly(args[0], reader);
+using var helper = AssemblyDefinition.ReadAssembly(args[1], reader);
+using var game = AssemblyDefinition.ReadAssembly(args[2], reader);
+using var unity = AssemblyDefinition.ReadAssembly(args[3], reader);
 
 // Refuse an unknown getter shape before introducing any reflected invocation.
 var getter = game.MainModule.GetType("PlayerData")?.Methods.SingleOrDefault(
@@ -44,8 +50,8 @@ il.InsertBefore(first, il.Create(OpCodes.Ldarg_0));
 il.InsertBefore(first, il.Create(OpCodes.Call, original.MainModule.ImportReference(probe)));
 original.Write(args[4]);
 
-using var baseline = AssemblyDefinition.ReadAssembly(args[0]);
-using var output = AssemblyDefinition.ReadAssembly(args[4]);
+using var baseline = AssemblyDefinition.ReadAssembly(args[0], reader);
+using var output = AssemblyDefinition.ReadAssembly(args[4], reader);
 if (args[6] == "1") RestoreLogs(baseline, unity);
 int verified = 0;
 foreach (var type in baseline.MainModule.Types.SelectMany(Flatten))

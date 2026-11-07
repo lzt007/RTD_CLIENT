@@ -23,6 +23,7 @@
 | build | 从原 APK 提取的程序集、编译中间文件、开发 keystore |
 | dist | 签名 APK、构建报告 |
 | tools | 本机工具/Mono.Cecil 二进制，不进 Git |
+| diagnostics/event-points | 保持游戏主程序集不变的活动积分只读观察包 |
 | diagnostics/settlement | 独立通关阶段诊断候选，不属于默认 APK 构建 |
 | docs/protocol | 已脱敏的协议、事务和网络边界归档 |
 
@@ -76,3 +77,5 @@ APK 调试：rtd.config.json 的 android.debuggable 当前为 true，重新打�
 - [通关阶段诊断候选](diagnostics/settlement/README.md)是独立Mono.Cecil工具，按固定程序集SHA256限制输入，插入阶段标记并回读校验原指令、跳转与异常区域。2026-11-06已通过C#编译检查；既有结构验证不等于Android实机验证。
 - 该候选未接入默认构建，也未据此发布新APK。资源存在、下载成功及模型显示正常不能证明通关或释放阶段不再闪退；当前仍保留这一未解决状态。
 - 活动开放与解锁由目标服务端运营配置、原前置及活动积分共同决定。服务端当前修复与生产资源审计见RTD_SERVER项目，不能用客户端本地缓存或开发数据库代替生产开放列表。
+
+活动积分观察工具见 [event-points 构建与边界说明](diagnostics/event-points/README.md)。Linux 注入时显式解析输入目录中的 Unity 运行库；观察包构建校验不替代通关、到账和重新登录后的设备验收。

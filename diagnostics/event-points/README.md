@@ -14,7 +14,7 @@
 
 ## 准备与构建
 
-依赖已有Python 3.10+、.NET SDK 10、Mono.Cecil、JDK和Android Build Tools。使用输入APK中解出的原 `mscorlib.dll` 和 `UnityEngine.dll` 编译探针，避免引用桌面.NET运行库。工具不下载或安装依赖。
+依赖已有Python 3.10+、.NET SDK 10、Mono.Cecil、JDK和Android Build Tools。使用输入APK中解出的原 `mscorlib.dll` 和 `UnityEngine.dll` 编译探针，避免引用桌面.NET运行库。工具不下载或安装依赖。注入器从输入程序集所在目录解析 Unity 运行库，避免 Linux/.NET 环境下误用宿主 GAC；请保留构建工具解出的原 `mscorlib.dll`。
 
 签名口令由调用方安全注入环境变量 `RTD_DIAG_STORE_PASS`、`RTD_DIAG_KEY_PASS`，不要把值写入命令、脚本、Git或验证报告。可通过 `--store-pass-env`／`--key-pass-env` 指定其他环境变量**名称**。签名工具只接收 `env:变量名`，不接收明文口令参数。
 
