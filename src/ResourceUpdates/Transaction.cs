@@ -5,19 +5,22 @@ using System.Collections.Generic;
 using LitJson;
 namespace RTD.ResourceUpdates {
  public interface IResourceTransport {IEnumerator Download(ResourceEntry entry);}
+ public interface IResourceBatchTransport:IResourceTransport {IEnumerator DownloadBatch(ResourceEntry[] entries);}
+ public delegate bool IsResourceCancelled();
  public interface IResourceGeneration {
   IEnumerator Prepare(ResolveResponse release);void Activate();IEnumerator Restore();void ReleasePrevious();
  }
  public delegate bool IsEmbeddedResource(ResourceEntry entry);
  public sealed class ResourceTransaction {
   readonly ResourceStore store;readonly IResourceTransport transport;readonly IResourceGeneration generation;readonly IsEmbeddedResource embedded;
+  public IsResourceCancelled Cancelled;bool restoring;
   public bool Success;public Exception Failure;public Exception RestoreFailure;public string Warning;
   public ResourceTransaction(ResourceStore store,IResourceTransport transport,IResourceGeneration generation,IsEmbeddedResource embedded){this.store=store;this.transport=transport;this.generation=generation;this.embedded=embedded;}
   public IEnumerator Execute(ResolveResponse release,string[] roots){
    Success=false;Failure=null;RestoreFailure=null;
    IEnumerator forward=Drive(Forward(release,roots));while(forward.MoveNext())yield return forward.Current;
    if(Failure!=null){
-    Exception original=Failure;Failure=null;
+    Exception original=Failure;Failure=null;restoring=true;
     IEnumerator restore=Drive(generation.Restore());while(restore.MoveNext())yield return restore.Current;
     RestoreFailure=Failure;Failure=original;
     try{store.Rollback();}catch(Exception error){RestoreFailure=error;}
@@ -26,7 +29,11 @@ namespace RTD.ResourceUpdates {
    Success=true;try{generation.ReleasePrevious();}catch(Exception error){Warning="Resource cleanup: "+error.GetType().Name;}
   }
   IEnumerator Forward(ResolveResponse release,string[] roots){
-   List<string> hashes=new List<string>();
+   List<string> hashes=new List<string>();List<ResourceEntry> missing=new List<ResourceEntry>();
+   foreach(ResourceEntry entry in release.resources)if((embedded==null||!embedded(entry))&&!store.HasVerified(entry.sha256,entry.size))missing.Add(entry);
+   IResourceBatchTransport batch=transport as IResourceBatchTransport;
+   if(batch!=null)yield return batch.DownloadBatch(missing.ToArray());
+   else foreach(ResourceEntry entry in missing)yield return transport.Download(entry);
    foreach(ResourceEntry entry in release.resources){
     if(embedded!=null&&embedded(entry))continue;
     if(!store.HasVerified(entry.sha256,entry.size))yield return transport.Download(entry);
@@ -42,9 +49,10 @@ namespace RTD.ResourceUpdates {
    Stack<IEnumerator> stack=new Stack<IEnumerator>();stack.Push(start);
    try {
     while(stack.Count>0){
+     if(!restoring&&Cancelled!=null&&Cancelled()){Failure=new IOException("Resource operation cancelled");yield break;}
      IEnumerator routine=stack.Peek();bool moved=false;object current=null;
      try{moved=routine.MoveNext();if(moved)current=routine.Current;}catch(Exception error){Failure=error;yield break;}
-     if(!moved){stack.Pop();IDisposable disposable=routine as IDisposable;if(disposable!=null)disposable.Dispose();continue;}
+     if(!moved){stack.Pop();IDisposable disposable=routine as IDisposable;if(disposable!=null)try{disposable.Dispose();}catch(Exception error){Failure=error;yield break;}continue;}
      IEnumerator nested=current as IEnumerator;if(nested!=null){stack.Push(nested);continue;}
      yield return current;
     }

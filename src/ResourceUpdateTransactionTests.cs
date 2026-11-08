@@ -9,8 +9,9 @@ class ResourceUpdateTransactionTests {
   public IEnumerator Download(ResourceEntry entry){yield return null;store.PutVerified(entry.sha256,entry.size,System.Text.Encoding.UTF8.GetBytes(corrupt?"bad":"new"));}
  }
  sealed class Generation:IResourceGeneration {
-  public bool fail;public bool activated;public bool restored;
-  public IEnumerator Prepare(ResolveResponse release){yield return null;if(fail)throw new IOException("invalid bundle");}
+  public bool fail;public bool disposeFailure;public bool activated;public bool restored;
+  public IEnumerator Prepare(ResolveResponse release){return new Preparation(this);}
+  sealed class Preparation:IEnumerator,IDisposable{readonly Generation owner;int step;public Preparation(Generation owner){this.owner=owner;}public object Current{get{return null;}}public bool MoveNext(){if(step++==0)return true;if(owner.fail)throw new IOException("invalid bundle");return false;}public void Reset(){throw new NotSupportedException();}public void Dispose(){if(owner.disposeFailure)throw new IOException("prepare cleanup failed");}}
   public void Activate(){activated=true;}
   public IEnumerator Restore(){restored=true;yield break;}
   public void ReleasePrevious(){}
@@ -33,7 +34,12 @@ class ResourceUpdateTransactionTests {
    if(transaction.Success||generation.activated||store.Recover()!="old-manifest")throw new Exception("bad download must not commit");
    transport.corrupt=false;transaction=new ResourceTransaction(store,transport,generation,null);Drain(transaction.Execute(release,new string[]{"a.unity3d"}));
    if(!transaction.Success||!generation.activated||!store.Recover().Contains("a.unity3d"))throw new Exception("complete generation activates");
-   Console.WriteLine("PASS 3 transaction integration checks");
+   generation=new Generation();transaction=new ResourceTransaction(store,transport,generation,null);bool cancel=false;transaction.Cancelled=delegate{return cancel;};
+   IEnumerator cancelled=transaction.Execute(release,new string[]{"a.unity3d"});if(!cancelled.MoveNext())throw new Exception("Expected preparation yield");cancel=true;Drain(cancelled);
+   if(transaction.Success||!generation.restored||transaction.Failure==null)throw new Exception("cancel must restore whole generation");
+   generation=new Generation{disposeFailure=true};transaction=new ResourceTransaction(store,transport,generation,null);Drain(transaction.Execute(release,new string[]{"a.unity3d"}));
+   if(transaction.Success||!generation.restored)throw new Exception("preparation disposal failure must roll back");
+   Console.WriteLine("PASS 5 transaction integration checks");
   } finally {if(Directory.Exists(root))Directory.Delete(root,true);}
  }
 }
