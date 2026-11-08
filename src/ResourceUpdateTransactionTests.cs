@@ -9,10 +9,10 @@ class ResourceUpdateTransactionTests {
   public IEnumerator Download(ResourceEntry entry){yield return null;store.PutVerified(entry.sha256,entry.size,System.Text.Encoding.UTF8.GetBytes(corrupt?"bad":"new"));}
  }
  sealed class Generation:IResourceGeneration {
-  public bool fail;public bool disposeFailure;public bool activated;public bool restored;
+  public bool fail;public bool disposeFailure;public string failAcceptRoot;public bool activated;public bool restored;
   public IEnumerator Prepare(ResolveResponse release){return new Preparation(this);}
   sealed class Preparation:IEnumerator,IDisposable{readonly Generation owner;int step;public Preparation(Generation owner){this.owner=owner;}public object Current{get{return null;}}public bool MoveNext(){if(step++==0)return true;if(owner.fail)throw new IOException("invalid bundle");return false;}public void Reset(){throw new NotSupportedException();}public void Dispose(){if(owner.disposeFailure)throw new IOException("prepare cleanup failed");}}
-  public void Activate(){activated=true;}
+  public void Activate(){activated=true;if(failAcceptRoot!=null)Directory.CreateDirectory(Path.Combine(failAcceptRoot,"history/pending.pending"));}
   public IEnumerator Restore(){restored=true;yield break;}
   public void ReleasePrevious(){}
  }
@@ -39,7 +39,10 @@ class ResourceUpdateTransactionTests {
    if(transaction.Success||!generation.restored||transaction.Failure==null)throw new Exception("cancel must restore whole generation");
    generation=new Generation{disposeFailure=true};transaction=new ResourceTransaction(store,transport,generation,null);Drain(transaction.Execute(release,new string[]{"a.unity3d"}));
    if(transaction.Success||!generation.restored)throw new Exception("preparation disposal failure must roll back");
-   Console.WriteLine("PASS 5 transaction integration checks");
+   string accepted=store.Recover();release.snapshotId=new string('d',64);generation=new Generation{failAcceptRoot=root};transaction=new ResourceTransaction(store,transport,generation,null);Drain(transaction.Execute(release,new string[]{"a.unity3d"}));
+   if(transaction.Success||!generation.activated||!generation.restored||store.Recover()!=accepted)throw new Exception("accept write failure must restore memory and committed manifest");
+   Directory.Delete(Path.Combine(root,"history/pending.pending"));
+   Console.WriteLine("PASS 6 transaction integration checks");
   } finally {if(Directory.Exists(root))Directory.Delete(root,true);}
  }
 }

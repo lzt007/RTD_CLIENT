@@ -7,7 +7,7 @@ using LitJson;
 using UnityEngine;
 namespace RTD.ResourceUpdates {
  public sealed class BaselineEntry {public string id;public string sha256;public int legacyVersion;public string legacyPayload;public string legacyPayloadHash;public int legacyLength;public int size;}
- public sealed class ResourceOperation {public bool Cancelled;public bool Ready;public string Error;public string Snapshot;}
+ public sealed class ResourceOperation {public string[] CheckedResources;public bool Cancelled;public bool Ready;public string Error;public string Snapshot;}
  public interface IResourceGameHooks {
   AssetBundle[] Detach(string[] ids);
   void Attach(Dictionary<string,WWW> prepared);
@@ -94,6 +94,7 @@ namespace RTD.ResourceUpdates {
     while(!request.isDone){if(Time.realtimeSinceStartup-started>=2f)throw new IOException("Version check timeout");yield return null;}
     if(!String.IsNullOrEmpty(request.error))throw new IOException("Version check failed");
     output[0]=ResourceProtocol.Parse(request.text,roots);
+    if(Time.realtimeSinceStartup-started>=2f)throw new IOException("Version check processing timeout");
     Log("resolved operation="+operation+" snapshot="+output[0].snapshotId+" count="+output[0].resources.Length+" ms="+((Time.realtimeSinceStartup-started)*1000f));
    }finally{request.Dispose();}
   }
@@ -106,6 +107,7 @@ namespace RTD.ResourceUpdates {
    foreach(LocalSnapshot candidate in candidates){if(!ResourcePlanner.CanFallback(candidate,roots))continue;bool complete=true;foreach(ResourceEntry entry in candidate.resources)if(!Available(entry)){complete=false;break;}if(complete)return candidate;}
    return null;
   }
+  static string[] ResourceIds(ResourceEntry[] entries){string[] ids=new string[entries.Length];for(int i=0;i<ids.Length;i++)ids[i]=entries[i].id;return ids;}
   public static IEnumerator EnsureCurrent(string[] roots,ResourceOperation operation){
    while(Busy)yield return null;Busy=true;
    try {
@@ -116,7 +118,7 @@ namespace RTD.ResourceUpdates {
     if(resolve.Error==null){
      ResourceTransaction transaction=new ResourceTransaction(store,new UnityTransport(store),new UnityGeneration(response[0]),Available);transaction.Cancelled=delegate{return operation.Cancelled;};
      IEnumerator work=transaction.Execute(response[0],roots);while(work.MoveNext())yield return work.Current;
-     if(transaction.Success){operation.Ready=true;operation.Snapshot=response[0].snapshotId;Log("committed operation="+id+" snapshot="+operation.Snapshot);yield break;}
+     if(transaction.Success){operation.CheckedResources=ResourceIds(response[0].resources);operation.Ready=true;operation.Snapshot=response[0].snapshotId;Log("committed operation="+id+" snapshot="+operation.Snapshot);yield break;}
      Log("rollback operation="+id+" reason="+transaction.Failure.GetType().Name+" restore="+(transaction.RestoreFailure==null));
      if(transaction.RestoreFailure!=null){operation.Error="Resource restore failed";yield break;}
     }else Log("resolve_failed operation="+id+" reason="+resolve.Error.GetType().Name);
@@ -126,7 +128,7 @@ namespace RTD.ResourceUpdates {
     ResolveResponse fallback=new ResolveResponse{protocol=1,snapshotId=previous.snapshotId,closureDigest=new string('0',64),resources=previous.resources};
     ResourceTransaction restoreTransaction=new ResourceTransaction(store,new UnityTransport(store),new UnityGeneration(fallback),Available);
     IEnumerator restoreWork=restoreTransaction.Execute(fallback,roots);while(restoreWork.MoveNext())yield return restoreWork.Current;
-    operation.Ready=restoreTransaction.Success;operation.Snapshot=previous.snapshotId;
+    operation.CheckedResources=ResourceIds(previous.resources);operation.Ready=restoreTransaction.Success;operation.Snapshot=previous.snapshotId;
     if(!operation.Ready)operation.Error="Previous resource generation unavailable";
     Log("fallback operation="+id+" snapshot="+previous.snapshotId+" ready="+operation.Ready);
    }finally{Busy=false;}

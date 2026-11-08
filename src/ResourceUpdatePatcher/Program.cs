@@ -19,6 +19,7 @@ class Program {
   Require(args.Length==5&&args[0]=="apply","apply MAIN CORE BRIDGE OUTPUT | verify MAIN | native-io CORE OUTPUT");
   Require(!File.Exists(args[4]),"Output already exists");
   using(var asm=AssemblyDefinition.ReadAssembly(args[1]))using(var core=AssemblyDefinition.ReadAssembly(args[2]))using(var bridge=AssemblyDefinition.ReadAssembly(args[3])){
+   Require(Methods(bridge.MainModule).Where(m=>m.DeclaringType.Name.Contains("WrapLevel")).SelectMany(m=>m.Body.Instructions).Any(i=>i.Operand is FieldReference&&((FieldReference)i.Operand).Name=="CheckedResources"),"Level lease must cover the resolved dependency closure");
    var se=bridge.MainModule.GetType("RTDResourceGameBridge").NestedTypes.Single(t=>t.Name=="GameHooks").Methods.Single(m=>m.Name=="RefreshAudio");
    var seCalls=se.Body.Instructions.Where(i=>i.Operand is MethodReference&&((MethodReference)i.Operand).Name=="AudioName").ToArray();
    Require(seCalls.Length==2&&seCalls[1].Previous.OpCode==OpCodes.Add&&seCalls[1].Previous.Previous.OpCode==OpCodes.Ldc_I4_1,"SE slot mapping must match original one-based resource index");

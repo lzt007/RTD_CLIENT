@@ -53,18 +53,25 @@ namespace RTD.ResourceUpdates {
    ResourceFiles.Move(At("staged"),At("active"));
   }
   public string[] ReadHistory(){
-   string history=At("history");if(!Directory.Exists(history))return new string[0];
-   string[] files=ResourceFiles.Manifests(history);Array.Sort(files);Array.Reverse(files);
-   string[] result=new string[files.Length];for(int i=0;i<files.Length;i++)result[i]=ResourceFiles.ReadText(files[i]);return result;
+   string history=At("history");
+   string[] files=Directory.Exists(history)?ResourceFiles.Manifests(history):new string[0];Array.Sort(files);Array.Reverse(files);
+   System.Collections.Generic.List<string> result=new System.Collections.Generic.List<string>();
+   string accepted=Path.Combine(At("active"),"accepted"),active=Path.Combine(At("active"),"manifest");
+   if(File.Exists(accepted)&&ResourceFiles.ReadText(accepted)=="accepted"&&File.Exists(active))result.Add(ResourceFiles.ReadText(active));
+   foreach(string file in files){string text=ResourceFiles.ReadText(file);if(!result.Contains(text))result.Add(text);}
+   return result.ToArray();
   }
+
   public void Accept(){
    if(!File.Exists(At("journal")))throw new InvalidOperationException("No activation");
    string history=At("history");Directory.CreateDirectory(history);
    string[] files=ResourceFiles.Manifests(history);Array.Sort(files);
    long sequence=files.Length==0?1:Int64.Parse(Path.GetFileName(files[files.Length-1]).Substring(0,20))+1;
-   string pending=Path.Combine(history,"pending");Write(pending,ResourceFiles.ReadText(Path.Combine(At("active"),"manifest")));
+   string manifest=ResourceFiles.ReadText(Path.Combine(At("active"),"manifest"));
+   bool duplicate=files.Length>0&&ResourceFiles.ReadText(files[files.Length-1])==manifest;
+   string pending=Path.Combine(history,"pending");if(!duplicate)Write(pending,manifest);
    Write(Path.Combine(At("active"),"accepted"),"accepted");
-   Warning=null;try{ResourceFiles.Move(pending,Path.Combine(history,sequence.ToString("D20")+".manifest"));File.Delete(At("journal"));ResourceFiles.SyncDirectory(root);}catch(Exception error){Warning="Accepted generation cleanup: "+error.GetType().Name;}
+   Warning=null;try{if(!duplicate)ResourceFiles.Move(pending,Path.Combine(history,sequence.ToString("D20")+".manifest"));File.Delete(At("journal"));ResourceFiles.SyncDirectory(root);}catch(Exception error){Warning="Accepted generation cleanup: "+error.GetType().Name;}
   }
   public string Rollback(){if(File.Exists(At("journal"))){Remove(At("active"));if(Directory.Exists(At("previous")))ResourceFiles.Move(At("previous"),At("active"));File.Delete(At("journal"));}return Recover();}
  }

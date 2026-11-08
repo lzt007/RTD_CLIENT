@@ -29,6 +29,11 @@ class ResourceUpdateStoreTests {
    Check(!store.HasVerified(newHash,3),"same length corrupt bytes detected");
    rejected=false;try{store.Stage("bad",new string[]{newHash},"bad");}catch(IOException){rejected=true;}
    Check(rejected,"corrupt dependency blocks whole stage");
+   store.PutVerified(newHash,3,fresh);store.Stage("new",new string[]{newHash},"new-manifest");store.Commit();store.Accept();
+   Check(store.ReadHistory().Length==2,"unchanged checks must not grow generation history");
+   Directory.CreateDirectory(Path.Combine(root,"history/00000000000000000003.manifest"));
+   store.Stage("third",new string[]{newHash},"third-manifest");store.Commit();store.Accept();
+   Check(store.Warning!=null&&new ResourceStore(root).Recover()=="third-manifest"&&store.ReadHistory()[0]=="third-manifest","accepted active generation remains first fallback after history cleanup failure");
    Console.WriteLine("PASS "+count+" resource store tests");
   } finally {if(Directory.Exists(root))Directory.Delete(root,true);}
  }

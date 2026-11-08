@@ -46,7 +46,7 @@ public static class RTDResourceGameBridge {
   try {
    leaseRoots=BasicRoots();yield return Runner().StartCoroutine(ResourceRuntime.EnsureCurrent(leaseRoots,operation));
    if(!operation.Ready){ResourceRuntime.Log("startup_unavailable reason="+operation.Error);Set(owner,"m_Phase",AssetBundleLoader.E_LOAD_STEP.ERROR);yield break;}
-   owner.GetType().GetMethod("RTDDownloadStartOriginal",Fields).Invoke(owner,null);
+   leaseRoots=operation.CheckedResources;owner.GetType().GetMethod("RTDDownloadStartOriginal",Fields).Invoke(owner,null);
    while(!owner.m_bLoadFinish)yield return null;
   }finally{startup=false;lease=false;leaseRoots=null;}
  }
@@ -56,7 +56,7 @@ public static class RTDResourceGameBridge {
    leaseRoots=CollectLevelRoots();
    yield return Runner().StartCoroutine(ResourceRuntime.EnsureCurrent(leaseRoots,operation));
    if(!operation.Ready)throw new IOException("Checked level resources unavailable");
-   ResourceRuntime.Log("level_ready roots="+leaseRoots.Length+" snapshot="+operation.Snapshot);
+   leaseRoots=operation.CheckedResources;ResourceRuntime.Log("level_ready resources="+leaseRoots.Length+" snapshot="+operation.Snapshot);
    while(original.MoveNext())yield return original.Current;
   }finally{if(operation!=null&&!operation.Ready)operation.Cancelled=true;IDisposable disposable=original as IDisposable;if(disposable!=null)disposable.Dispose();leaseRoots=null;lease=false;}
  }

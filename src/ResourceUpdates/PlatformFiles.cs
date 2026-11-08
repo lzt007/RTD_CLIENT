@@ -57,7 +57,7 @@ namespace RTD.ResourceUpdates {
    System.Collections.Generic.List<string> result=new System.Collections.Generic.List<string>();
    using(AndroidJavaObject directory=new AndroidJavaObject("java.io.File",path)){
     string[] names=directory.Call<string[]>("list");if(names==null)throw new IOException("Cannot list resource history");
-    foreach(string name in names)if(name.EndsWith(".manifest"))result.Add(Path.Combine(path,name));
+    foreach(string name in names)if(name.EndsWith(".manifest")&&File.Exists(Path.Combine(path,name)))result.Add(Path.Combine(path,name));
    }
    return result.ToArray();
 #else
