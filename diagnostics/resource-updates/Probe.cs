@@ -21,7 +21,7 @@ public sealed class RTDResourceProbe : MonoBehaviour {
   if(!String.IsNullOrEmpty(first.error)){Debug.LogError("RTD_UPDATE_PROBE first error="+first.error);yield break;}
   AssetBundle old=first.assetBundle;
   if(old==null){Debug.LogError("RTD_UPDATE_PROBE first null");yield break;}
-  UnityEngine.Object[] oldObjects=new UnityEngine.Object[]{old.Load("ms00_book_el_05",typeof(GameObject))};
+  UnityEngine.Object[] oldObjects=new UnityEngine.Object[]{old.Load("ast_ms00_book_el_05",typeof(GameObject))};
   Debug.Log("RTD_UPDATE_PROBE old objects="+oldObjects.Length);
   WWW second=new WWW("file://"+Path.Combine(root,"rtd-probe-b.unity3d"));yield return second;
   AssetBundle fresh=second.assetBundle;
@@ -32,7 +32,7 @@ public sealed class RTDResourceProbe : MonoBehaviour {
   WWW third=new WWW("file://"+Path.Combine(root,"rtd-probe-b.unity3d"));yield return third;
   AssetBundle replacement=third.assetBundle;
   if(replacement==null){Debug.LogError("RTD_UPDATE_PROBE reload null error="+third.error);yield break;}
-  UnityEngine.Object[] objects=new UnityEngine.Object[]{replacement.Load("ms00_book_el_05",typeof(GameObject))};
+  UnityEngine.Object[] objects=new UnityEngine.Object[]{replacement.Load("ast_ms00_book_el_05",typeof(GameObject))};
   Debug.Log("RTD_UPDATE_PROBE reloaded="+objects.Length+" oldRetained="+(oldObjects.Length>0&&oldObjects[0]!=null));
   replacement.Unload(true);third.Dispose();
   WWW rollback=new WWW("file://"+Path.Combine(root,"rtd-probe-a.unity3d"));yield return rollback;

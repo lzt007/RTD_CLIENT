@@ -23,3 +23,6 @@ handoff/
 *.obb
 *.unity3d
 *.assets
+
+# Verified local mapping from embedded payloads to published transport hashes
+inputs/resource-baseline.json

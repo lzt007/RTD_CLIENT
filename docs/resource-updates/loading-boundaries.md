@@ -9,3 +9,7 @@
 AssetBundleLoader.m_BasicBundleList 持有基础内存包。AssetBundleCheck 仅检查 dictionary ContainsKey，更新后必须刷新该引用。UnloadAsset(key, allDelete) 会卸载并移除；UnloadAsset_PlayerUnit 仅卸载编号 1 以上，音频 0 常驻。GameManager.m_EnemyAssetList 持有敌人包；ClearAssetBundleData 使用 Unload(true)，并清空 prefab 列表、卸载玩家包，不能在旧关卡仍有引用时直接复用。
 
 diagnostics/resource-updates/Probe.cs 为独立标记触发候选，测试同 CAB 并存、Unload(false) 后旧对象保留、新加载与旧文件恢复；不默认接入发布构建。结果待设备运行，不把编译成功当作引擎验证。
+
+生产有效下载来源已按实际服务策略合并（原包优先，再怪物、活动覆盖），2026-11-08 离线扫描共 375 包，所有 SerializedFile 外部引用可解析，当前均无跨包 SerializedFile 依赖。角色/书本等代码动态依赖仍必须由关卡根集合收集；此结果不能代替动态根收集。扫描输入与详细日志只保留在 ignored build/resource-probe 下，避免发布实际部署路径。
+
+真机探针结果：coexist=False，Unload(false) 后旧对象 retained=True；随后新包 reloaded=1 且旧对象仍保留；新包释放后旧文件 rollback=True。原包/新包样本为相同内容、相同 CAB 的书本包；证明句柄切换路径，不单独证明不同内容与完整关卡事务成功。详细运行日志保留 ignored build/resource-probe/runtime.log。
