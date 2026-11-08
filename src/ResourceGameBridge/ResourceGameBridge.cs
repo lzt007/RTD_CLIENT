@@ -101,8 +101,13 @@ public static class RTDResourceGameBridge {
    SoundManager sound=Singleton<SoundManager>.Instance;if(sound==null)return;
    savedBgm=(AudioClip[])Get(sound,"BGMAudioClips");savedSe=(AudioClip[])Get(sound,"SEAudioClips");savedSources=new Dictionary<AudioSource,AudioClip>();savedPlaying=new Dictionary<AudioSource,bool>();
    AudioClip[] bgm=new AudioClip[savedBgm.Length],se=new AudioClip[savedSe.Length];int[] indices=(int[])Get(sound,"m_BgmResIndex");
-   for(int i=0;i<bgm.Length;i++)if(savedBgm[i]!=null){string name=AudioName("MakeBgmFileName",indices[i]);bgm[i]=bundle.Load(name,typeof(AudioClip)) as AudioClip;if(bgm[i]==null)throw new IOException("Missing updated BGM");}
-   for(int i=0;i<se.Length;i++)if(savedSe[i]!=null){string name=AudioName("MakeSeFileName",i+1);se[i]=bundle.Load(name,typeof(AudioClip)) as AudioClip;if(se[i]==null)throw new IOException("Missing updated SE");}
+   for(int i=0;i<bgm.Length;i++)if(savedBgm[i]!=null){
+    // LoadBGM never assigns resource index 0: non-null clips in those slots
+    // come from the APK's serialized SoundManager, not the remote bundle.
+    if(indices[i]==0){bgm[i]=savedBgm[i];continue;}
+    string name=AudioName("MakeBgmFileName",indices[i]);ResourceRuntime.Log("audio_prepare kind=bgm slot="+i+" resource="+indices[i]+" export="+name+" previous="+savedBgm[i].name);bgm[i]=bundle.Load(name,typeof(AudioClip)) as AudioClip;if(bgm[i]==null)throw new IOException("Missing updated BGM");
+   }
+   for(int i=0;i<se.Length;i++)if(savedSe[i]!=null){string name=AudioName("MakeSeFileName",i+1);ResourceRuntime.Log("audio_prepare kind=se slot="+i+" export="+name+" previous="+savedSe[i].name);se[i]=bundle.Load(name,typeof(AudioClip)) as AudioClip;if(se[i]==null)throw new IOException("Missing updated SE");}
    Set(sound,"BGMAudioClips",bgm);Set(sound,"SEAudioClips",se);
    ReplaceSources((AudioSource[])Get(sound,"BGMAudioSources"),savedBgm,bgm);ReplaceSources((AudioSource[])Get(sound,"SEAudioSources"),savedSe,se);
   }

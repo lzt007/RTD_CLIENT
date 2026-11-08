@@ -25,6 +25,17 @@ class ResourceUpdateStoreTests {
    store.Stage("new",new string[]{newHash},"new-manifest");store.Commit();store.Accept();
    Check(new ResourceStore(root).Recover()=="new-manifest","accepted activation survives");
    Check(store.ReadHistory().Length==2,"accepted generations retained for other operation fallback");
+   store.Stage("interrupted",new string[]{newHash},"interrupted-manifest");
+   File.WriteAllText(Path.Combine(root,"journal"),"activating");
+   Check(store.Rollback()=="new-manifest","failure after journal before directory switch preserves accepted active");
+   store.Stage("interrupted",new string[]{newHash},"interrupted-manifest");
+   File.WriteAllText(Path.Combine(root,"journal"),"activating");
+   if(Directory.Exists(Path.Combine(root,"previous")))Directory.Delete(Path.Combine(root,"previous"),true);
+   Directory.Move(Path.Combine(root,"active"),Path.Combine(root,"previous"));
+   Check(store.Rollback()=="new-manifest","failure between directory renames restores previous accepted active");
+   store.Stage("interrupted",new string[]{newHash},"interrupted-manifest");store.Commit();
+   File.WriteAllText(Path.Combine(root,"active/accepted"),"accepted");
+   Check(store.Rollback()=="new-manifest","explicit rollback after acceptance marker sync failure restores old generation");
    File.WriteAllBytes(store.BlobPath(newHash),old);
    Check(!store.HasVerified(newHash,3),"same length corrupt bytes detected");
    rejected=false;try{store.Stage("bad",new string[]{newHash},"bad");}catch(IOException){rejected=true;}

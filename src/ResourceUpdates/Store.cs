@@ -73,6 +73,11 @@ namespace RTD.ResourceUpdates {
    Write(Path.Combine(At("active"),"accepted"),"accepted");
    Warning=null;try{if(!duplicate)ResourceFiles.Move(pending,Path.Combine(history,sequence.ToString("D20")+".manifest"));File.Delete(At("journal"));ResourceFiles.SyncDirectory(root);}catch(Exception error){Warning="Accepted generation cleanup: "+error.GetType().Name;}
   }
-  public string Rollback(){if(File.Exists(At("journal"))){Remove(At("active"));if(Directory.Exists(At("previous")))ResourceFiles.Move(At("previous"),At("active"));File.Delete(At("journal"));}return Recover();}
+  public string Rollback(){
+   // A journal can exist before active has moved. Only force removal after
+   // staged has actually become active, including rename-success/sync-failure.
+   if(File.Exists(At("journal"))&&!Directory.Exists(At("staged"))){Remove(At("active"));if(Directory.Exists(At("previous")))ResourceFiles.Move(At("previous"),At("active"));File.Delete(At("journal"));}
+   return Recover();
+  }
  }
 }
