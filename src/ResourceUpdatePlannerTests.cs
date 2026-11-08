@@ -14,6 +14,10 @@ class ResourceUpdatePlannerTests {
   if(ResourcePlanner.CanFallback(new LocalSnapshot{resources=new ResourceEntry[]{a}},new string[]{"a.unity3d"}))throw new Exception("missing dependency accepted");
   if(ResourcePlanner.CanFallback(null,new string[]{"a.unity3d"}))throw new Exception("first load fallback");
   if(ResourcePlanner.CanFallback(local,new string[]{"other.unity3d"}))throw new Exception("unrelated fallback");
-  Console.WriteLine("PASS 6 planner checks");
+  ResourceEntry c=E("c.unity3d",new string('c',64),"a.unity3d"),unrelated=E("d.unity3d",new string('d',64));
+  string[] affected=ResourcePlanner.ReloadClosure(new ResourceEntry[]{c,a,b,unrelated},new string[]{"b.unity3d"});Array.Sort(affected);
+  if(String.Join(",",affected)!="a.unity3d,b.unity3d,c.unity3d")throw new Exception("changed dependency must reload transitive parents only");
+  if(ResourcePlanner.ReloadClosure(new ResourceEntry[]{a,b},new string[0]).Length!=0)throw new Exception("no change must not reload");
+  Console.WriteLine("PASS 8 planner checks");
  }
 }

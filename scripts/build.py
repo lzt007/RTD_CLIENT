@@ -81,6 +81,21 @@ def main():
 
  (build/'EmbeddedCacheIndex.cs').write_text('public static class EmbeddedCacheIndex { public static readonly string[] Files = new string[]{'+','.join(json.dumps(x) for x in cache_index)+'};}',encoding='utf-8')
  compile('RTDFlow.dll',['RTDFlow.cs','RTDLocalStore.cs','RTDSkillAttributes.cs','RTDBattleEstimate.cs','RTDNetworkTrace.cs','RTDEmbeddedCache.cs',str(build/'EmbeddedCacheIndex.cs')],cache_resources)
+ # Resource updates are formal behavior in every language build.
+ baseline_path=path(p.get('resourceBaseline','inputs/resource-baseline.json'))
+ baseline=json.loads(baseline_path.read_text()) if baseline_path.exists() else []
+ for entry in baseline:
+  relative=pathlib.PurePosixPath(entry['legacyPayload'])
+  if relative.is_absolute() or '..' in relative.parts or not str(relative).startswith('Shared/'):raise ValueError('Unsafe baseline cache path')
+  payload=path(p['resourceCache'])/str(relative)
+  if payload.stat().st_size!=entry['legacyLength'] or sha(payload.read_bytes())!=entry['legacyPayloadHash']:raise ValueError('Baseline cache identity mismatch')
+  if not re.fullmatch('[a-f0-9]{64}',entry['sha256']) or not 0<entry['size']<=536870912:raise ValueError('Invalid baseline transport identity')
+ resource_url='http://'+net['deviceHost']+':'+str(net['resourcePort'])
+ (build/'ResourceUpdateConfig.cs').write_text('namespace RTD.ResourceUpdates {public static class ResourceUpdateConfig {public const string BaseUrl='+json.dumps(resource_url)+';}public static class ResourceBaselineIndex {public const string Json='+json.dumps(json.dumps(baseline,separators=(',',':')))+';}}',encoding='utf-8')
+ compile('RTDResourceCore.dll',[str(x) for x in sorted((ROOT/'src/ResourceUpdates').glob('*.cs'))]+[str(build/'ResourceUpdateConfig.cs')],['/define:RTD_LEGACY','/reference:'+str(managed/'System.dll'),'/reference:'+str(managed/'Assembly-CSharp-firstpass.dll')])
+ run([dotnet,'run','-p:RTDCecilPath='+str(path(t['cecil'])),'--project',ROOT/'src/ResourceUpdatePatcher','--','native-io',build/'RTDResourceCore.dll',build/'RTDResourceCore-native.dll'])
+ shutil.move(build/'RTDResourceCore-native.dll',build/'RTDResourceCore.dll')
+ compile('RTDResourceGameBridge.dll',[str(x) for x in sorted((ROOT/'src/ResourceGameBridge').glob('*.cs'))],['/define:RTD_LEGACY','/reference:'+str(managed/'System.dll'),'/reference:'+str(managed/'Assembly-CSharp.dll'),'/reference:'+str(build/'RTDResourceCore.dll')])
  compile('RTDRestoreCache.dll',['RTDRestoreCache.cs'],['/define:RTD_LEGACY','/reference:'+str(managed/'Assembly-CSharp.dll')])
  resources=['/resource:'+str(path(p['translation']))+',rtd.translation.json']
  font_paths=[path(p['fontPng']),path(p['fontGlyphs'])] if args.language!='ja' else [build/'no-font-ja.png',build/'no-font-ja.tsv']
@@ -103,6 +118,10 @@ def main():
  # Rewrite all patch-injected roots after structural patches; original sources remain untouched.
  patch('EndpointPatcher',[build/'localized.dll',build/'Assembly-CSharp.dll',str(config_path)])
  patch('TracePatcher',['embed-cache-hook',build/'Assembly-CSharp.dll',build/'RTDFlow.dll'])
+ resource_patched=build/'resource-patched.dll';resource_patched.unlink(missing_ok=True)
+ patch('ResourceUpdatePatcher',['apply',build/'Assembly-CSharp.dll',build/'RTDResourceCore.dll',build/'RTDResourceGameBridge.dll',resource_patched])
+ shutil.move(resource_patched,build/'Assembly-CSharp.dll')
+ patch('ResourceUpdatePatcher',['verify',build/'Assembly-CSharp.dll'])
  patch('LoaderTests',[])
  patch('LocalStoreTests',[managed/'Assembly-CSharp.dll'])
  patch('LocalizationTests',[managed/'Assembly-CSharp.dll',build/'Assembly-CSharp.dll'])
@@ -113,7 +132,7 @@ def main():
   patch('TracePatcher',['filter-logs',build/assembly,log_level])
  shutil.copyfile(build/'endpoint-audit.json',dist/'endpoint-audit.json')
  replacements={NATIVE_MEMBER:native,'assets/bin/Data/level0':bytes(scene),'assets/bin/Data/Managed/Assembly-CSharp.dll':(build/'Assembly-CSharp.dll').read_bytes(),'assets/bin/Data/Managed/Assembly-CSharp-firstpass.dll':(build/'Assembly-CSharp-firstpass-trace.dll').read_bytes()}
- for helper in ['RTDFlow.dll','RTDRestoreCache.dll','RTDLocalization.dll']:replacements['assets/bin/Data/Managed/'+helper]=(build/helper).read_bytes()
+ for helper in ['RTDFlow.dll','RTDRestoreCache.dll','RTDLocalization.dll','RTDResourceCore.dll','RTDResourceGameBridge.dll']:replacements['assets/bin/Data/Managed/'+helper]=(build/helper).read_bytes()
  for f in cache_files:replacements['assets/rtd-cache/'+f.relative_to(path(p['resourceCache'])).as_posix()]=f.read_bytes()
  replacements['AndroidManifest.xml']=manifest
  # Replace obsolete native loader shells with the actual original engine libraries.
@@ -142,7 +161,7 @@ def main():
   assert len(z.namelist())==len(set(z.namelist()))
   for site in meta['call_sites']:assert struct.unpack_from('<I',native,site)[0]>>24==0xea
  meta.update(original_apk_sha256=original_sha,apk_sha256=sha(out.read_bytes()),output=report_path(out),translation_entries=len(translations),network=net,logging_level=log_level,verification='zipalign/apksigner/native-sites/managed-shapes; no device/runtime validation')
- meta.update(language=args.language)
+ meta.update(language=args.language,resource_updates="protocol 1; startup/level/single gates; durable transaction store",resource_baseline_entries=len(baseline))
  meta.update(android_debuggable=c.get('android',{}).get('debuggable',False))
  meta.update(embedded_cache_files=len(cache_files),embedded_cache_bytes=sum(f.stat().st_size for f in cache_files))
  meta.update(startup_billing_checks='bypassed in local mode',network_trace='RTD_NET; five WWW POST sites',endpoint_audit=report_path(dist/'endpoint-audit.json'))

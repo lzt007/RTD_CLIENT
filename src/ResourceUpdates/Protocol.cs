@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using LitJson;
 namespace RTD.ResourceUpdates {
  public sealed class ResourceEntry {
-  public string id;public string sha256;public int size;public int cacheVersion;public string downloadPath;public string[] dependencies;
+  public string id;public string sha256;public int size;public int cacheVersion;public string downloadPath;public string[] dependencies;public string[] requiredPrefabs;
  }
  public sealed class ResolveResponse {
   public int protocol;public string snapshotId;public string closureDigest;public ResourceEntry[] resources;
@@ -12,6 +12,12 @@ namespace RTD.ResourceUpdates {
   public int protocol=1;public string operationId;public string[] roots;public string knownSnapshot;
  }
  public static class ResourceProtocol {
+  public static string MatchId(string url,string[] ids){
+   string path=url;int query=path.IndexOf('?');if(query>=0)path=path.Substring(0,query);
+   int fragment=path.IndexOf('#');if(fragment>=0)path=path.Substring(0,fragment);
+   string found=null;foreach(string id in ids)if((path==id||path.EndsWith("/"+id))&&(found==null||id.Length>found.Length))found=id;
+   return found;
+  }
   static void Require(bool value){if(!value)throw new FormatException("Invalid resource snapshot");}
   public static bool IsHash(string value){if(value==null||value.Length!=64)return false;foreach(char c in value)if(!((c>='a'&&c<='f')||(c>='0'&&c<='9')))return false;return true;}
   public static bool IsId(string value){
@@ -28,6 +34,7 @@ namespace RTD.ResourceUpdates {
    Dictionary<string,int> versions=new Dictionary<string,int>();
    foreach(ResourceEntry entry in result.resources){
     Require(entry!=null&&IsId(entry.id)&&IsHash(entry.sha256)&&entry.size>0&&entry.size<=536870912&&entry.cacheVersion>0&&entry.dependencies!=null&&!entries.ContainsKey(entry.id));
+    if(entry.requiredPrefabs!=null){Require(entry.requiredPrefabs.Length<=256);foreach(string prefab in entry.requiredPrefabs){Require(!String.IsNullOrEmpty(prefab)&&prefab.Length<=256);foreach(char c in prefab)Require(c>=32&&c!=127);}}
     string name=entry.id.Substring(entry.id.LastIndexOf('/')+1);
     Require(entry.downloadPath=="/resources/v1/blobs/"+entry.sha256+"/"+name);
     string cacheKey=name+"@"+entry.cacheVersion;

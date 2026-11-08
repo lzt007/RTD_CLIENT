@@ -8,6 +8,11 @@ namespace RTD.ResourceUpdates {
   public ResolveResponse remote;public ResourceEntry[] downloads;
  }
  public static class ResourcePlanner {
+  public static string[] ReloadClosure(ResourceEntry[] resources,string[] changed){
+   Dictionary<string,bool> affected=new Dictionary<string,bool>();foreach(string id in changed)affected[id]=true;
+   bool expanded=true;while(expanded){expanded=false;foreach(ResourceEntry entry in resources){if(affected.ContainsKey(entry.id))continue;foreach(string dependency in entry.dependencies)if(affected.ContainsKey(dependency)){affected[entry.id]=true;expanded=true;break;}}}
+   List<string> result=new List<string>();foreach(ResourceEntry entry in resources)if(affected.ContainsKey(entry.id))result.Add(entry.id);return result.ToArray();
+  }
   public static UpdatePlan Plan(ResolveResponse remote,LocalSnapshot local){
    Dictionary<string,ResourceEntry> known=new Dictionary<string,ResourceEntry>();
    if(local!=null&&local.resources!=null)foreach(ResourceEntry entry in local.resources)known[entry.id]=entry;
