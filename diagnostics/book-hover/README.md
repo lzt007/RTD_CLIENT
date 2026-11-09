@@ -23,7 +23,8 @@ The helper creates a temporary offscreen clone and samples three phases:
 Old v7 samples move; v8 samples book_hover. A moving root clip alone is insufficient:
 **the skin bone must continue moving while the child Wait state is playing**.
 The helper destroys its clone after the experiment. `RTD_HOVER_LIVE` additionally
-samples actual visible color-03 book instances once per second; it does not change
+samples active book instances once per second, recognizing the nested hover path
+even if the game renamed the root; it does not change
 their animation or transform. No account/session values or endpoints are logged.
 
 After verification, install the normal Chinese APK over the candidate and remove

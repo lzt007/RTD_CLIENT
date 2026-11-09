@@ -7,7 +7,16 @@ public sealed class RTDHoverProbe : MonoBehaviour {
  static string State(Animation a){string s="enabled="+a.enabled+" playing="+a.isPlaying;foreach(AnimationState v in a)s+=" ["+v.name+" en="+v.enabled+" t="+v.time+" w="+v.weight+"]";return s;}
  IEnumerator Sample(GameObject g,string phase){Transform m=g.transform.Find("move");Transform bone=(g.transform.Find("move/book_hover")??g.transform.Find("book_hover")??g.transform.Find("move"));float min=999,max=-999;for(int i=0;i<20;i++){yield return new WaitForSeconds(0.1f);float y=bone.localPosition.y;min=Mathf.Min(min,y);max=Mathf.Max(max,y);if(i==0||i==19)Debug.Log("RTD_HOVER_PROBE "+phase+" boneY="+y+" moveY="+m.localPosition.y+" root="+State(g.animation)+" child="+State(m.animation));}Debug.Log("RTD_HOVER_PROBE "+phase+" min="+min+" max="+max+" delta="+(max-min));}
  float lastScan;
- void Update(){if(Time.realtimeSinceStartup-lastScan<1)return;lastScan=Time.realtimeSinceStartup;foreach(SkinnedMeshRenderer r in UnityEngine.Object.FindObjectsOfType(typeof(SkinnedMeshRenderer))){if(!r.gameObject.name.StartsWith("ast_ms00_book_el_03")||r.transform.position.x>9000)continue;Transform m=r.transform.Find("move");if(m!=null)Debug.Log("RTD_HOVER_LIVE bone="+(r.transform.Find("move/book_hover")??r.transform.Find("book_hover")??m).name+" boneY="+(r.transform.Find("move/book_hover")??r.transform.Find("book_hover")??m).localPosition.y+" moveY="+m.localPosition.y+" root="+State(r.animation)+" child="+State(m.animation));}}
+ void Update(){
+  if(Time.realtimeSinceStartup-lastScan<1)return;
+  lastScan=Time.realtimeSinceStartup;
+  foreach(SkinnedMeshRenderer r in UnityEngine.Object.FindObjectsOfType(typeof(SkinnedMeshRenderer))){
+   Transform m=r.transform.Find("move"),hover=r.transform.Find("move/book_hover");
+   if(r.transform.position.x>9000||m==null||(!r.gameObject.name.StartsWith("ast_ms00_book_el_03")&&hover==null))continue;
+   Transform bone=hover??r.transform.Find("book_hover")??m;
+   Debug.Log("RTD_HOVER_LIVE bone="+bone.name+" boneY="+bone.localPosition.y+" moveY="+m.localPosition.y+" root="+State(r.animation)+" child="+State(m.animation));
+  }
+ }
  IEnumerator Start(){
   yield return new WaitForSeconds(3);
   string path=Path.Combine(Application.persistentDataPath,"hover-book.unity3d");
